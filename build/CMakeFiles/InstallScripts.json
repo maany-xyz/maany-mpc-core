@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cmake_install.cmake",
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cpp/third_party/cb-mpc/cmake_install.cmake",
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cpp/third_party/cb-mpc/src/cbmpc/core/cmake_install.cmake",
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cpp/third_party/cb-mpc/src/cbmpc/crypto/cmake_install.cmake",
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cpp/third_party/cb-mpc/src/cbmpc/zk/cmake_install.cmake",
+		"/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/cpp/third_party/cb-mpc/src/cbmpc/protocol/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

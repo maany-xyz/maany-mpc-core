@@ -21,5 +21,6 @@ target_include_directories(maany_mpc_core PRIVATE cpp/third_party/cb-mpc/src)
 target_link_libraries(maany_mpc_core PRIVATE cbmpc)  # actual target name may differ
 
 add_executable(dkg_roundtrip tests/cpp/dkg_roundtrip.cpp)
+target_include_directories(dkg_roundtrip PRIVATE cpp/third_party/cb-mpc/src ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(dkg_roundtrip PRIVATE maany_mpc_core)
 add_test(NAME dkg_roundtrip COMMAND dkg_roundtrip)

@@ -7,9 +7,12 @@
 #include <cbmpc/crypto/base_pki.h>
 #include <cbmpc/protocol/ecdsa_2p.h>
 
+#include <cstdint>
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <cstring>
+#include <algorithm>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -187,6 +190,7 @@ class AsyncSession {
   ::error_t OnReceive(mem_t& msg) {
     std::unique_lock<std::mutex> lock(mutex_);
     waiting_for_inbound_ = true;
+    ++wait_request_id_;
     cv_.notify_all();
     cv_.wait(lock, [&] { return !inbound_queue_.empty() || aborted_ || fatal_.has_value(); });
     if (fatal_) return E_GENERAL;
@@ -201,6 +205,8 @@ class AsyncSession {
   }
 
   StepOutput AwaitStep(const std::optional<BufferOwner>& inbound) {
+    const uint64_t wait_snapshot = wait_request_id_;
+
     if (inbound && !inbound->bytes.empty()) {
       std::lock_guard<std::mutex> lock(mutex_);
       inbound_queue_.push_back(inbound->bytes);
@@ -213,25 +219,32 @@ class AsyncSession {
     }
 
     std::unique_lock<std::mutex> lock(mutex_);
-    cv_.wait(lock, [&] { return outbound_.has_value() || worker_done_ || fatal_.has_value(); });
-
-    if (fatal_) {
-      auto err = *fatal_;
-      lock.unlock();
-      throw Error(err.code, err.message);
+    for (;;) {
+      if (fatal_) {
+        auto err = *fatal_;
+        lock.unlock();
+        throw Error(err.code, err.message);
+      }
+      if (outbound_) {
+        StepOutput out;
+        std::vector<uint8_t> data = std::move(*outbound_);
+        outbound_.reset();
+        out.outbound = MakeBuffer(std::move(data));
+        out.state = worker_done_ ? StepState::Done : StepState::Continue;
+        return out;
+      }
+      if (worker_done_) {
+        StepOutput out;
+        out.state = StepState::Done;
+        return out;
+      }
+      if (waiting_for_inbound_ && wait_request_id_ > wait_snapshot) {
+        StepOutput out;
+        out.state = StepState::Continue;
+        return out;
+      }
+      cv_.wait(lock);
     }
-
-    StepOutput out;
-    if (outbound_) {
-      std::vector<uint8_t> data = std::move(*outbound_);
-      outbound_.reset();
-      out.outbound = MakeBuffer(std::move(data));
-      out.state = worker_done_ ? StepState::Done : StepState::Continue;
-      return out;
-    }
-
-    out.state = worker_done_ ? StepState::Done : StepState::Continue;
-    return out;
   }
 
   void Fail(ErrorCode code, std::string message) {
@@ -289,6 +302,7 @@ class AsyncSession {
   std::vector<uint8_t> inbound_active_;
   std::optional<std::vector<uint8_t>> outbound_;
   std::optional<StoredError> fatal_;
+  uint64_t wait_request_id_ = 0;
 };
 
 class FiberJob final : public job_2p_t {
@@ -378,6 +392,127 @@ class DkgSessionImpl final : public DkgSession, private AsyncSession {
   bool key_ready_ = false;
 };
 
+class SignSessionImpl final : public SignSession, private AsyncSession {
+ public:
+  SignSessionImpl(const KeypairImpl& kp, const SignOptions& opts)
+      : opts_(opts),
+        curve_(kp.key().curve),
+        party_(ToParty(kp.kind())),
+        key_(kp.key()),
+        job_(std::make_unique<FiberJob>(party_, static_cast<AsyncSession&>(*this))) {
+    if (opts.scheme != Scheme::Ecdsa2p) throw Error(ErrorCode::Unsupported, "only ECDSA 2p sign supported");
+    StartWorker([this]() { Worker(); });
+  }
+
+  ~SignSessionImpl() override {
+    std::fill(signature_der_.bytes.begin(), signature_der_.bytes.end(), 0);
+    std::fill(signature_raw_.bytes.begin(), signature_raw_.bytes.end(), 0);
+  }
+
+  void SetMessage(const uint8_t* msg, size_t len) override {
+    if (!msg || len == 0) throw Error(ErrorCode::InvalidArgument, "message required");
+    std::lock_guard<std::mutex> lock(message_mutex_);
+    if (message_ready_) throw Error(ErrorCode::ProtocolState, "message already set");
+    message_.assign(msg, msg + len);
+    message_ready_ = true;
+    message_cv_.notify_all();
+  }
+
+  StepOutput Step(const std::optional<BufferOwner>& inbound) override { return AwaitStep(inbound); }
+
+  BufferOwner Finalize(SigFormat fmt) override {
+    EnsureWorkerFinished();
+    if (party_ != party_t::p1) throw Error(ErrorCode::ProtocolState, "signature finalize not available for this share");
+    BufferOwner out;
+    {
+      std::lock_guard<std::mutex> guard(result_mutex_);
+      if (!signature_ready_) throw Error(ErrorCode::ProtocolState, "signature not ready");
+      const std::vector<uint8_t>& src = (fmt == SigFormat::Der) ? signature_der_.bytes : signature_raw_.bytes;
+      if (src.empty()) throw Error(ErrorCode::ProtocolState, "requested signature format unavailable");
+      out.bytes = src;
+    }
+    return out;
+  }
+
+ private:
+  void Worker() {
+    std::unique_lock<std::mutex> lock(message_mutex_);
+    message_cv_.wait(lock, [&] { return message_ready_ || fatal_.has_value() || aborted_; });
+    if (!message_ready_) return;
+    std::vector<uint8_t> msg = std::move(message_);
+    message_.clear();
+    message_ready_ = false;
+    lock.unlock();
+
+    coinbase::mem_t msg_mem(msg.data(), static_cast<int>(msg.size()));
+
+    coinbase::buf_t sid_buf;
+    if (!opts_.session_id.bytes.empty()) {
+      sid_buf = coinbase::buf_t(static_cast<int>(opts_.session_id.bytes.size()));
+      std::memcpy(sid_buf.data(), opts_.session_id.bytes.data(), opts_.session_id.bytes.size());
+    }
+
+    coinbase::buf_t sig_buf;
+    auto rv = coinbase::mpc::ecdsa2pc::sign(*job_, sid_buf, key_, msg_mem, sig_buf);
+    if (rv != SUCCESS) {
+      Fail(MapError(rv), FormatError(rv, "ecdsa2pc::sign"));
+      return;
+    }
+
+    if (sig_buf.size() == 0) {
+      sig_buf.secure_bzero();
+      std::fill(msg.begin(), msg.end(), 0);
+      cv_.notify_all();
+      return;
+    }
+
+    signature_der_.bytes.assign(sig_buf.data(), sig_buf.data() + sig_buf.size());
+    sig_buf.secure_bzero();
+
+    coinbase::crypto::ecdsa_signature_t parsed;
+    rv = parsed.from_der(curve_, coinbase::mem_t(signature_der_.bytes.data(),
+                                                static_cast<int>(signature_der_.bytes.size())));
+    if (rv) {
+      Fail(MapError(rv), FormatError(rv, "ecdsa_signature_t::from_der"));
+      return;
+    }
+
+    const auto order = curve_.order();
+    int coord_size = order.get_bin_size();
+    coinbase::buf_t r_bin = parsed.get_r().to_bin(coord_size);
+    coinbase::buf_t s_bin = parsed.get_s().to_bin(coord_size);
+    signature_raw_.bytes.resize(static_cast<size_t>(coord_size) * 2);
+    std::memcpy(signature_raw_.bytes.data(), r_bin.data(), coord_size);
+    std::memcpy(signature_raw_.bytes.data() + coord_size, s_bin.data(), coord_size);
+    r_bin.secure_bzero();
+    s_bin.secure_bzero();
+
+    std::fill(msg.begin(), msg.end(), 0);
+
+    {
+      std::lock_guard<std::mutex> guard(result_mutex_);
+      signature_ready_ = true;
+    }
+    cv_.notify_all();
+  }
+
+  SignOptions opts_;
+  coinbase::crypto::ecurve_t curve_;
+  party_t party_;
+  key_t key_;
+  std::unique_ptr<FiberJob> job_;
+
+  std::mutex message_mutex_;
+  std::condition_variable message_cv_;
+  std::vector<uint8_t> message_;
+  bool message_ready_ = false;
+
+  std::mutex result_mutex_;
+  bool signature_ready_ = false;
+  BufferOwner signature_der_;
+  BufferOwner signature_raw_;
+};
+
 class ContextImpl final : public Context {
  public:
   explicit ContextImpl(const InitOptions& opts) : opts_(opts) {}
@@ -442,8 +577,9 @@ class ContextImpl final : public Context {
     return pub;
   }
 
-  std::unique_ptr<SignSession> CreateSign(const Keypair&, const SignOptions&) override {
-    throw Error(ErrorCode::Unsupported, "signing not yet implemented");
+  std::unique_ptr<SignSession> CreateSign(const Keypair& kp_base, const SignOptions& opts) override {
+    auto& kp = dynamic_cast<const KeypairImpl&>(kp_base);
+    return std::make_unique<SignSessionImpl>(kp, opts);
   }
 
  private:

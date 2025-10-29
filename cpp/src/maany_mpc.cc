@@ -2,6 +2,7 @@
 
 #include "bridge.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -30,7 +31,7 @@ struct maany_mpc_kp_s {
 };
 
 struct maany_mpc_sign_s {
-  /* TODO: sign session */
+  std::unique_ptr<maany::bridge::SignSession> session;
   maany_mpc_ctx_t* owner;
 };
 
@@ -46,6 +47,9 @@ using maany::bridge::KeyId;
 using maany::bridge::Keypair;
 using maany::bridge::PubKey;
 using maany::bridge::ShareKind;
+using maany::bridge::SignOptions;
+using maany::bridge::SignSession;
+using maany::bridge::SigFormat;
 using maany::bridge::StepOutput;
 using maany::bridge::StepState;
 using maany::bridge::Scheme;
@@ -134,6 +138,21 @@ DkgOptions ConvertDkgOptions(const maany_mpc_dkg_opts_t& opts) {
   if (opts.session_id.data && opts.session_id.len) {
     o.session_id.bytes.assign(static_cast<const uint8_t*>(opts.session_id.data),
                               static_cast<const uint8_t*>(opts.session_id.data) + opts.session_id.len);
+  }
+  return o;
+}
+
+SignOptions ConvertSignOptions(const maany_mpc_sign_opts_t* opts) {
+  SignOptions o;
+  if (!opts) return o;
+  o.scheme = static_cast<Scheme>(opts->scheme);
+  if (opts->session_id.data && opts->session_id.len) {
+    o.session_id.bytes.assign(static_cast<const uint8_t*>(opts->session_id.data),
+                              static_cast<const uint8_t*>(opts->session_id.data) + opts->session_id.len);
+  }
+  if (opts->extra_aad.data && opts->extra_aad.len) {
+    o.extra_aad.bytes.assign(static_cast<const uint8_t*>(opts->extra_aad.data),
+                             static_cast<const uint8_t*>(opts->extra_aad.data) + opts->extra_aad.len);
   }
   return o;
 }
@@ -420,11 +439,22 @@ maany_mpc_error_t maany_mpc_sign_new(
   const maany_mpc_keypair_t* kp,
   const maany_mpc_sign_opts_t* opts,
   maany_mpc_sign_t** out_sign) {
-  (void)ctx;
-  (void)kp;
-  (void)opts;
-  if (out_sign) *out_sign = nullptr;
-  return MAANY_MPC_ERR_UNSUPPORTED;
+  if (!ctx || !ctx->bridge || !kp || !kp->keypair || !out_sign) return MAANY_MPC_ERR_INVALID_ARG;
+
+  try {
+    SignOptions bridge_opts = ConvertSignOptions(opts);
+    auto session = ctx->bridge->CreateSign(*kp->keypair, bridge_opts);
+
+    void* raw = ctx->malloc_fn(sizeof(maany_mpc_sign_s));
+    if (!raw) return MAANY_MPC_ERR_MEMORY;
+    auto* handle = new (raw) maany_mpc_sign_s();
+    handle->owner = ctx;
+    handle->session = std::move(session);
+    *out_sign = handle;
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
 }
 
 maany_mpc_error_t maany_mpc_sign_set_message(
@@ -432,11 +462,14 @@ maany_mpc_error_t maany_mpc_sign_set_message(
   maany_mpc_sign_t* sign,
   const uint8_t* msg,
   size_t msg_len) {
-  (void)ctx;
-  (void)sign;
-  (void)msg;
-  (void)msg_len;
-  return MAANY_MPC_ERR_UNSUPPORTED;
+  if (!ctx || !sign || !sign->session || !msg || msg_len == 0) return MAANY_MPC_ERR_INVALID_ARG;
+
+  try {
+    sign->session->SetMessage(msg, msg_len);
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
 }
 
 maany_mpc_error_t maany_mpc_sign_step(
@@ -445,15 +478,36 @@ maany_mpc_error_t maany_mpc_sign_step(
   const maany_mpc_buf_t* in_peer_msg,
   maany_mpc_buf_t* out_msg,
   maany_mpc_step_result_t* result) {
-  (void)ctx;
-  (void)sign;
-  (void)in_peer_msg;
+  if (!ctx || !sign || !sign->session) return MAANY_MPC_ERR_INVALID_ARG;
   if (out_msg) {
     out_msg->data = nullptr;
     out_msg->len = 0;
   }
   if (result) *result = MAANY_MPC_STEP_CONTINUE;
-  return MAANY_MPC_ERR_UNSUPPORTED;
+
+  try {
+    std::optional<BufferOwner> inbound;
+    if (in_peer_msg && in_peer_msg->len) {
+      try {
+        inbound = BufferOwner{CopyInBuffer(in_peer_msg)};
+      } catch (...) {
+        return MAANY_MPC_ERR_INVALID_ARG;
+      }
+    } else if (in_peer_msg && in_peer_msg->len == 0) {
+      inbound = BufferOwner{};
+    }
+
+    StepOutput output = sign->session->Step(inbound);
+    if (output.outbound && !out_msg) return MAANY_MPC_ERR_INVALID_ARG;
+    if (out_msg && output.outbound) {
+      maany_mpc_error_t err = CopyOutBuffer(ctx, output.outbound->bytes, out_msg);
+      if (err != MAANY_MPC_OK) return err;
+    }
+    if (result) *result = static_cast<maany_mpc_step_result_t>(output.state);
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
 }
 
 maany_mpc_error_t maany_mpc_sign_finalize(
@@ -461,20 +515,24 @@ maany_mpc_error_t maany_mpc_sign_finalize(
   maany_mpc_sign_t* sign,
   maany_mpc_sig_format_t fmt,
   maany_mpc_buf_t* out_signature) {
-  (void)ctx;
-  (void)sign;
-  (void)fmt;
-  if (out_signature) {
-    out_signature->data = nullptr;
-    out_signature->len = 0;
+  if (!ctx || !sign || !sign->session || !out_signature) return MAANY_MPC_ERR_INVALID_ARG;
+
+  try {
+    BufferOwner sig = sign->session->Finalize(static_cast<SigFormat>(fmt));
+    maany_mpc_error_t err = CopyOutBuffer(ctx, sig.bytes, out_signature);
+    if (err != MAANY_MPC_OK) return err;
+    std::fill(sig.bytes.begin(), sig.bytes.end(), 0);
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
   }
-  return MAANY_MPC_ERR_UNSUPPORTED;
 }
 
 void maany_mpc_sign_free(maany_mpc_sign_t* sign) {
   if (!sign) return;
   maany_mpc_ctx_t* owner = sign->owner;
   maany_mpc_free_fn free_fn = owner && owner->free_fn ? owner->free_fn : DefaultFree;
+  sign->session.reset();
   sign->~maany_mpc_sign_s();
   free_fn(sign);
 }
