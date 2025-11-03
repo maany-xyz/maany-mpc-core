@@ -85,6 +85,18 @@ are forwarded into the bridge layer.
    `MAANY_MPC_SIG_FORMAT_RAW_RS`; the device handle supports repeated calls for
    different formats without re-running the protocol.
 
+### Share Refresh
+
+1. For an existing local share, create a refresh session via
+   `maany_mpc_refresh_new`. The API reuses the DKG step/finalize entry points.
+2. Run the same round-robin loop using `maany_mpc_dkg_step` until both parties
+   report `MAANY_MPC_STEP_DONE`.
+3. Call `maany_mpc_dkg_finalize` on each refresh handle to obtain updated key
+   shares. The resulting public key should match the original share.
+
+The refresh API returns entirely new keypair handles; remember to free the old
+handles once the application transitions to the refreshed shares.
+
 ### Memory Management
 
 All buffers returned through the public API must be released with

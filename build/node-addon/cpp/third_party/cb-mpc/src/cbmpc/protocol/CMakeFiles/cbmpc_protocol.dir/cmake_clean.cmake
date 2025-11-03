@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/cbmpc_protocol.dir/agree_random.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/agree_random.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/cmake_pch.hxx.pch"
+  "CMakeFiles/cbmpc_protocol.dir/cmake_pch.hxx.pch.d"
+  "CMakeFiles/cbmpc_protocol.dir/ec_dkg.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/ec_dkg.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/ecdsa_2p.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/ecdsa_2p.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/ecdsa_mp.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/ecdsa_mp.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/eddsa.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/eddsa.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/hd_keyset_ecdsa_2p.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/hd_keyset_ecdsa_2p.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/hd_keyset_eddsa_2p.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/hd_keyset_eddsa_2p.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/hd_tree_bip32.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/hd_tree_bip32.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/int_commitment.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/int_commitment.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/mpc_job.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/mpc_job.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/mpc_job_session.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/mpc_job_session.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/ot.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/ot.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/pve.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/pve.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/pve_ac.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/pve_ac.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/schnorr_2p.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/schnorr_2p.cpp.o.d"
+  "CMakeFiles/cbmpc_protocol.dir/schnorr_mp.cpp.o"
+  "CMakeFiles/cbmpc_protocol.dir/schnorr_mp.cpp.o.d"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/cbmpc_protocol.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

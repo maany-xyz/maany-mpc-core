@@ -24,3 +24,8 @@ add_executable(dkg_roundtrip tests/cpp/dkg_roundtrip.cpp)
 target_include_directories(dkg_roundtrip PRIVATE cpp/third_party/cb-mpc/src ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(dkg_roundtrip PRIVATE maany_mpc_core)
 add_test(NAME dkg_roundtrip COMMAND dkg_roundtrip)
+
+option(MAANY_BUILD_NODE_ADDON "Build the Node.js addon" OFF)
+if(MAANY_BUILD_NODE_ADDON)
+  add_subdirectory(bindings/node)
+endif()

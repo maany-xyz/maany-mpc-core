@@ -1,0 +1,8 @@
+{
+  "name": "@maany/mpc-node-tests",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node ./roundtrip.js && node ./roundtrip-coordinator.js"
+  }
+}

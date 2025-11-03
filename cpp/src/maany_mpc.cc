@@ -54,6 +54,7 @@ using maany::bridge::StepOutput;
 using maany::bridge::StepState;
 using maany::bridge::Scheme;
 using maany::bridge::Curve;
+using maany::bridge::RefreshOptions;
 
 void* DefaultMalloc(size_t n) {
   return std::malloc(n);
@@ -153,6 +154,16 @@ SignOptions ConvertSignOptions(const maany_mpc_sign_opts_t* opts) {
   if (opts->extra_aad.data && opts->extra_aad.len) {
     o.extra_aad.bytes.assign(static_cast<const uint8_t*>(opts->extra_aad.data),
                              static_cast<const uint8_t*>(opts->extra_aad.data) + opts->extra_aad.len);
+  }
+  return o;
+}
+
+RefreshOptions ConvertRefreshOptions(const maany_mpc_refresh_opts_t* opts) {
+  RefreshOptions o;
+  if (!opts) return o;
+  if (opts->session_id.data && opts->session_id.len) {
+    o.session_id.bytes.assign(static_cast<const uint8_t*>(opts->session_id.data),
+                              static_cast<const uint8_t*>(opts->session_id.data) + opts->session_id.len);
   }
   return o;
 }
@@ -542,11 +553,22 @@ maany_mpc_error_t maany_mpc_refresh_new(
   const maany_mpc_keypair_t* kp,
   const maany_mpc_refresh_opts_t* opts,
   maany_mpc_dkg_t** out_refresh) {
-  (void)ctx;
-  (void)kp;
-  (void)opts;
-  if (out_refresh) *out_refresh = nullptr;
-  return MAANY_MPC_ERR_UNSUPPORTED;
+  if (!ctx || !ctx->bridge || !kp || !kp->keypair || !out_refresh) return MAANY_MPC_ERR_INVALID_ARG;
+
+  try {
+    RefreshOptions bridge_opts = ConvertRefreshOptions(opts);
+    auto session = ctx->bridge->CreateRefresh(*kp->keypair, bridge_opts);
+
+    void* raw = ctx->malloc_fn(sizeof(maany_mpc_dkg_t));
+    if (!raw) return MAANY_MPC_ERR_MEMORY;
+    maany_mpc_dkg_t* handle = new (raw) maany_mpc_dkg_t();
+    handle->owner = ctx;
+    handle->session = std::move(session);
+    *out_refresh = handle;
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
 }
 
 void maany_mpc_free(void* p) {

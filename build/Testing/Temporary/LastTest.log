@@ -1,0 +1,18 @@
+Start testing: Oct 28 22:18 -05
+----------------------------------------------------------
+1/1 Testing: dkg_roundtrip
+1/1 Test: dkg_roundtrip
+Command: "/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/dkg_roundtrip"
+Directory: /Users/markokuncic/Desktop/Tools/maany-mpc-core/build
+"dkg_roundtrip" start time: Oct 28 22:18 -05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Passed.
+"dkg_roundtrip" end time: Oct 28 22:18 -05
+"dkg_roundtrip" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 28 22:18 -05

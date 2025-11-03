@@ -392,6 +392,63 @@ class DkgSessionImpl final : public DkgSession, private AsyncSession {
   bool key_ready_ = false;
 };
 
+class RefreshSessionImpl final : public DkgSession, private AsyncSession {
+ public:
+  RefreshSessionImpl(const KeypairImpl& kp, const RefreshOptions& opts)
+      : kind_(kp.kind()),
+        scheme_(kp.scheme()),
+        curve_(kp.key().curve),
+        party_(ToParty(kp.kind())),
+        key_id_(kp.key_id()),
+        existing_key_(kp.key()),
+        job_(std::make_unique<FiberJob>(party_, static_cast<AsyncSession&>(*this))) {
+    if (scheme_ != Scheme::Ecdsa2p) throw Error(ErrorCode::Unsupported, "only ECDSA 2p refresh supported");
+    (void)opts;
+    StartWorker([this]() { Worker(); });
+  }
+
+  ~RefreshSessionImpl() override = default;
+
+  StepOutput Step(const std::optional<BufferOwner>& inbound) override { return AwaitStep(inbound); }
+
+  std::unique_ptr<Keypair> Finalize() override {
+    EnsureWorkerFinished();
+    if (!key_ready_) throw Error(ErrorCode::ProtocolState, "refresh not complete");
+    key_ready_ = false;
+    return std::make_unique<KeypairImpl>(kind_, scheme_, FromCbCurve(curve_), key_id_, key_);
+  }
+
+ private:
+  void Worker() {
+    key_t tmp;
+    tmp.role = party_;
+    tmp.curve = curve_;
+    tmp.Q = existing_key_.Q;
+    auto rv = coinbase::mpc::ecdsa2pc::refresh(*job_, existing_key_, tmp);
+    if (rv != SUCCESS) {
+      Fail(MapError(rv), FormatError(rv, "ecdsa2pc::refresh"));
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      key_ = std::move(tmp);
+      key_ready_ = true;
+    }
+    cv_.notify_all();
+  }
+
+  ShareKind kind_;
+  Scheme scheme_;
+  ecurve_t curve_;
+  party_t party_;
+  KeyId key_id_;
+  key_t existing_key_;
+  key_t key_{};
+  std::unique_ptr<FiberJob> job_;
+  bool key_ready_ = false;
+};
+
 class SignSessionImpl final : public SignSession, private AsyncSession {
  public:
   SignSessionImpl(const KeypairImpl& kp, const SignOptions& opts)
@@ -580,6 +637,11 @@ class ContextImpl final : public Context {
   std::unique_ptr<SignSession> CreateSign(const Keypair& kp_base, const SignOptions& opts) override {
     auto& kp = dynamic_cast<const KeypairImpl&>(kp_base);
     return std::make_unique<SignSessionImpl>(kp, opts);
+  }
+
+  std::unique_ptr<DkgSession> CreateRefresh(const Keypair& kp_base, const RefreshOptions& opts) override {
+    auto& kp = dynamic_cast<const KeypairImpl&>(kp_base);
+    return std::make_unique<RefreshSessionImpl>(kp, opts);
   }
 
  private:

@@ -95,6 +95,51 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 .PHONY : rebuild_cache/fast
 
+# Special rule for the target list_install_components
+list_install_components:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Available install components are: \"Unspecified\""
+.PHONY : list_install_components
+
+# Special rule for the target list_install_components
+list_install_components/fast: list_install_components
+.PHONY : list_install_components/fast
+
+# Special rule for the target install
+install: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
+	/opt/homebrew/bin/cmake -P cmake_install.cmake
+.PHONY : install
+
+# Special rule for the target install
+install/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
+	/opt/homebrew/bin/cmake -P cmake_install.cmake
+.PHONY : install/fast
+
+# Special rule for the target install/local
+install/local: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
+	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local
+
+# Special rule for the target install/local
+install/local/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
+	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+.PHONY : install/local/fast
+
+# Special rule for the target install/strip
+install/strip: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
+	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip
+
+# Special rule for the target install/strip
+install/strip/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
+	/opt/homebrew/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip/fast
+
 # The main all target
 all: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/markokuncic/Desktop/Tools/maany-mpc-core/build/CMakeFiles /Users/markokuncic/Desktop/Tools/maany-mpc-core/build//CMakeFiles/progress.marks
@@ -217,6 +262,19 @@ cbmpc_protocol/fast:
 	$(MAKE) $(MAKESILENT) -f cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/build.make cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/build
 .PHONY : cbmpc_protocol/fast
 
+#=============================================================================
+# Target rules for targets named maany_mpc_node
+
+# Build rule for target.
+maany_mpc_node: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 maany_mpc_node
+.PHONY : maany_mpc_node
+
+# fast build rule for target.
+maany_mpc_node/fast:
+	$(MAKE) $(MAKESILENT) -f bindings/node/CMakeFiles/maany_mpc_node.dir/build.make bindings/node/CMakeFiles/maany_mpc_node.dir/build
+.PHONY : maany_mpc_node/fast
+
 cpp/src/bridge.o: cpp/src/bridge.cpp.o
 .PHONY : cpp/src/bridge.o
 
@@ -296,6 +354,10 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... edit_cache"
+	@echo "... install"
+	@echo "... install/local"
+	@echo "... install/strip"
+	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... cbmpc"
@@ -305,6 +367,7 @@ help:
 	@echo "... cbmpc_zk"
 	@echo "... dkg_roundtrip"
 	@echo "... maany_mpc_core"
+	@echo "... maany_mpc_node"
 	@echo "... cpp/src/bridge.o"
 	@echo "... cpp/src/bridge.i"
 	@echo "... cpp/src/bridge.s"

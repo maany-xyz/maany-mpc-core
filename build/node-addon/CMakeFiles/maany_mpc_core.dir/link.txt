@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmaany_mpc_core.a CMakeFiles/maany_mpc_core.dir/cpp/src/bridge.cpp.o CMakeFiles/maany_mpc_core.dir/cpp/src/maany_mpc.cc.o
+/usr/bin/ranlib libmaany_mpc_core.a

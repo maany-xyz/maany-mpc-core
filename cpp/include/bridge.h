@@ -100,6 +100,10 @@ struct SignOptions {
   BufferOwner extra_aad;
 };
 
+struct RefreshOptions {
+  BufferOwner session_id;
+};
+
 struct StepOutput {
   StepState state{StepState::Continue};
   std::optional<BufferOwner> outbound;
@@ -119,6 +123,7 @@ class Context {
   virtual BufferOwner ExportKey(const Keypair& kp) = 0;
   virtual PubKey GetPubKey(const Keypair& kp) = 0;
   virtual std::unique_ptr<SignSession> CreateSign(const Keypair& kp, const SignOptions& opts) = 0;
+  virtual std::unique_ptr<DkgSession> CreateRefresh(const Keypair& kp, const RefreshOptions& opts) = 0;
 };
 
 class Keypair {

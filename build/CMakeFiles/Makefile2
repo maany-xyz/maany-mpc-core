@@ -65,22 +65,44 @@ CMAKE_BINARY_DIR = /Users/markokuncic/Desktop/Tools/maany-mpc-core/build
 # The main recursive "all" target.
 all: CMakeFiles/maany_mpc_core.dir/all
 all: CMakeFiles/dkg_roundtrip.dir/all
+all: bindings/node/all
 .PHONY : all
 
 # The main recursive "codegen" target.
 codegen: CMakeFiles/maany_mpc_core.dir/codegen
 codegen: CMakeFiles/dkg_roundtrip.dir/codegen
+codegen: bindings/node/codegen
 .PHONY : codegen
 
 # The main recursive "preinstall" target.
-preinstall:
+preinstall: bindings/node/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: CMakeFiles/maany_mpc_core.dir/clean
 clean: CMakeFiles/dkg_roundtrip.dir/clean
 clean: cpp/third_party/cb-mpc/clean
+clean: bindings/node/clean
 .PHONY : clean
+
+#=============================================================================
+# Directory level rules for directory bindings/node
+
+# Recursive "all" directory target.
+bindings/node/all: bindings/node/CMakeFiles/maany_mpc_node.dir/all
+.PHONY : bindings/node/all
+
+# Recursive "codegen" directory target.
+bindings/node/codegen: bindings/node/CMakeFiles/maany_mpc_node.dir/codegen
+.PHONY : bindings/node/codegen
+
+# Recursive "preinstall" directory target.
+bindings/node/preinstall:
+.PHONY : bindings/node/preinstall
+
+# Recursive "clean" directory target.
+bindings/node/clean: bindings/node/CMakeFiles/maany_mpc_node.dir/clean
+.PHONY : bindings/node/clean
 
 #=============================================================================
 # Directory level rules for directory cpp/third_party/cb-mpc
@@ -422,6 +444,39 @@ cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/codegen:
 cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/clean:
 	$(MAKE) $(MAKESILENT) -f cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/build.make cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/clean
 .PHONY : cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/clean
+
+#=============================================================================
+# Target rules for target bindings/node/CMakeFiles/maany_mpc_node.dir
+
+# All Build rule for target.
+bindings/node/CMakeFiles/maany_mpc_node.dir/all: CMakeFiles/maany_mpc_core.dir/all
+bindings/node/CMakeFiles/maany_mpc_node.dir/all: cpp/third_party/cb-mpc/CMakeFiles/cbmpc.dir/all
+	$(MAKE) $(MAKESILENT) -f bindings/node/CMakeFiles/maany_mpc_node.dir/build.make bindings/node/CMakeFiles/maany_mpc_node.dir/depend
+	$(MAKE) $(MAKESILENT) -f bindings/node/CMakeFiles/maany_mpc_node.dir/build.make bindings/node/CMakeFiles/maany_mpc_node.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/CMakeFiles --progress-num=59,60 "Built target maany_mpc_node"
+.PHONY : bindings/node/CMakeFiles/maany_mpc_node.dir/all
+
+# Build rule for subdir invocation for target.
+bindings/node/CMakeFiles/maany_mpc_node.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/markokuncic/Desktop/Tools/maany-mpc-core/build/CMakeFiles 58
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 bindings/node/CMakeFiles/maany_mpc_node.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/markokuncic/Desktop/Tools/maany-mpc-core/build/CMakeFiles 0
+.PHONY : bindings/node/CMakeFiles/maany_mpc_node.dir/rule
+
+# Convenience name for target.
+maany_mpc_node: bindings/node/CMakeFiles/maany_mpc_node.dir/rule
+.PHONY : maany_mpc_node
+
+# codegen rule for target.
+bindings/node/CMakeFiles/maany_mpc_node.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f bindings/node/CMakeFiles/maany_mpc_node.dir/build.make bindings/node/CMakeFiles/maany_mpc_node.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/CMakeFiles --progress-num=59,60 "Finished codegen for target maany_mpc_node"
+.PHONY : bindings/node/CMakeFiles/maany_mpc_node.dir/codegen
+
+# clean rule for target.
+bindings/node/CMakeFiles/maany_mpc_node.dir/clean:
+	$(MAKE) $(MAKESILENT) -f bindings/node/CMakeFiles/maany_mpc_node.dir/build.make bindings/node/CMakeFiles/maany_mpc_node.dir/clean
+.PHONY : bindings/node/CMakeFiles/maany_mpc_node.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

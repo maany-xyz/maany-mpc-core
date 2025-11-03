@@ -1,0 +1,20 @@
+{
+  "name": "@maany/mpc-node",
+  "version": "0.1.0",
+  "description": "Node.js bindings for the Maany MPC core library",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "configure": "cmake -S ../.. -B ../../build/node-addon -DMAANY_BUILD_NODE_ADDON=ON -DCMAKE_BUILD_TYPE=Release",
+    "build": "cmake --build ../../build/node-addon -j",
+    "copy": "node -e \"const fs=require('node:fs');const path=require('node:path');const src=path.resolve(__dirname,'../../build/bindings/node/maany_mpc_node.node');const dst=path.resolve(__dirname,'maany_mpc_node.node');if(!fs.existsSync(src)){throw new Error('Addon build output not found at '+src);}fs.copyFileSync(src,dst);\"",
+    "prepare": "npm run configure && npm run build && npm run copy",
+    "clean": "node -e \"const fs=require('node:fs');const path=require('node:path');const build=path.resolve(__dirname,'../../build/node-addon');const addon=path.resolve(__dirname,'maany_mpc_node.node');if(fs.existsSync(build)){fs.rmSync(build,{recursive:true,force:true});}if(fs.existsSync(addon)){fs.rmSync(addon,{force:true});}\""
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "maany_mpc_node.node"
+  ]
+}

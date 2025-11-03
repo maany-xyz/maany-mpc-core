@@ -1,0 +1,15 @@
+{
+  "name": "@maany/mpc-rn",
+  "version": "0.1.0",
+  "description": "React Native bindings for the Maany MPC core library",
+  "main": "index.ts",
+  "types": "index.ts",
+  "react-native": "index.ts",
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "cpp",
+    "android",
+    "ios"
+  ]
+}
