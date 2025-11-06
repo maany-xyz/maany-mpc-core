@@ -1,308 +1,194 @@
-0) Goals (scope for this milestone)
+0) Folder layout (suggested)
 
-Protocol: ECDSA 2-of-2 only (secp256k1).
+Put all iOS-relevant sources under ios/ so CocoaPods can glob them without ../:
 
-Targets: Node (N-API addon), React Native (JSI/TurboModule). (Browser/WASM later.)
-
-Public ABI: Stable C API (maany_mpc_*) that wraps cb-mpc C++ and hides its types.
-
-Bindings: TS facade with identical API for Node and RN.
-
-No network & no at-rest encryption inside the bridge—storage and transport are the SDK’s job.
-
-1) Repository structure (final)
-maany-mpc-core/
-  CMakeLists.txt
-  CMakePresets.json
-  cpp/
-    include/
-      maany_mpc.h               # public C ABI (stable)
-      bridge.h                  # internal C++ façade (thin)
-    src/
-      maany_mpc.c               # C ABI -> bridge
-      bridge.cpp                # bridge -> cb-mpc C++
-      util.cc                   # helpers (DER encode, zeroize, buf marshal)
-    third_party/
-      cb-mpc/                   # submodule @ cb-mpc-v0.1.0
-  bindings/
-    node/
-      CMakeLists.txt
-      addon.cc                  # N-API -> maany_mpc_*
-      package.json
-      index.ts                  # TS facade loader
-      tsconfig.json
-    rn/
-      android/
-        CMakeLists.txt
-        build.gradle
-        src/main/cpp/addon_jni.cc     # JSI host object -> maany_mpc_*
-      ios/
-        MaanyMpc.mm                   # JSI/Turbo module
-        MaanyMpc.podspec
-      index.ts
-      package.json
-      tsconfig.json
-  packages/
-    mpc-core/
-      src/index.ts               # Runtime selector: node vs rn
-      package.json
-      tsconfig.json
-      README.md
-  tests/
-    node/
-      roundtrip.spec.ts          # jest/vitest E2E against addon
-    rn/
-      roundtrip.spec.ts          # detox or jest + JSI direct call
-  .github/workflows/
-    ci.yml
-    release.yml
-
-2) Public C API (freeze this)
-
-File: cpp/include/maany_mpc.h
-
-Rules:
-
-All output buffers are lib-allocated; caller frees with maany_mpc_buf_free.
-
-kp_export returns an opaque blob (SDK encrypts/stores it; bridge doesn’t).
-
-Public key is 33-byte compressed secp256k1.
-
-3) Internal bridge API (C++)
-
-File: cpp/include/bridge.h
-
-File: cpp/src/bridge.cpp
-Implement using cb-mpc ecdsa-2pc classes @ v0.1.0. Map:
-
-Ctx holds cb-mpc global state (rng, OpenSSL handles if needed).
-
-Dkg wraps 2-party DKG instance (device/server roles).
-
-Keypair wraps the local share object/bytes.
-
-Sign wraps 2-party signer instance.
-
-Serialize/deserialize protocol messages to raw std::vector<uint8_t>.
-
-Notes for Codex:
-
-Use cb-mpc’s provided message structs/serialization helpers (if any). If not, use the repo’s demo encoding (protobuf/json) and keep it byte-compatible between device/server.
-
-Ensure small-subgroup & parameter checks mirror cb-mpc demo patterns.
-
-4) C ABI thunk
-
-File: cpp/src/maany_mpc.c
-
-Convert C buffers ⇄ std::vector<uint8_t>.
-
-Convert handles to owning std::unique_ptr<> stored inside opaque structs.
-
-Map bool/throw from bridge to maany_mpc_error_t.
-
-Opaque structs (C side):
-
-struct maany_mpc_ctx_s  { void* p; };
-struct maany_mpc_dkg_s  { void* p; };
-struct maany_mpc_kp_s   { void* p; };
-struct maany_mpc_sign_s { void* p; };
+@maany/mpc-rn/
+├─ package.json
+├─ index.ts
+└─ ios/
+   ├─ MaanyMpc.mm                        # JSI installer (Obj-C++)
+   ├─ cpp/                               # your thin hostobject layer
+   │  ├─ MaanyMpcHostObject.cpp
+   │  └─ MaanyMpcHostObject.h
+   └─ native/                            # bring cb-mpc & your core sources here
+      ├─ cbmpc/                          # (headers + .c/.cc/.cpp)
+      └─ maany_core/                     # (headers + .c/.cc/.cpp)
 
 
-Internally cast p to corresponding std::unique_ptr<maany::bridge::X>*.
+If cb-mpc is a submodule, you can symlink or copy the specific portable source folders you need into ios/native/…. Avoid platform-specific files that rely on their original CMake; we’ll replicate any required defines in the podspec.
 
-5) Node binding (N-API)
+1) Depend on a maintained SSL Pod (no vendoring)
 
-Files: bindings/node/addon.cc, bindings/node/CMakeLists.txt, bindings/node/package.json
+Pick one:
 
-Exposed JS API (final)
-export type Ctx = object & { __brand: 'ctx' };
-export type Keypair = object & { __brand: 'kp' };
-export type Dkg = object & { __brand: 'dkg' };
-export type Sign = object & { __brand: 'sign' };
+OpenSSL-Universal (widely used, static libs)
 
-export function init(): Ctx;
-export function shutdown(ctx: Ctx): void;
+BoringSSL-GRPC (if cb-mpc is BoringSSL-compatible)
 
-export function dkgNew(ctx: Ctx, role: 'device'|'server', keyId?: Uint8Array, sessionId?: Uint8Array): Dkg;
-export function dkgStep(ctx: Ctx, dkg: Dkg, inPeerMsg?: Uint8Array): { outMsg?: Uint8Array; done: boolean };
-export function dkgFinalize(ctx: Ctx, dkg: Dkg): Keypair;
+For OpenSSL, the headers & libs resolve via $(PODS_ROOT)/OpenSSL-Universal/** automatically—no manual search paths required.
 
-export function kpExport(ctx: Ctx, kp: Keypair): Uint8Array;
-export function kpImport(ctx: Ctx, blob: Uint8Array): Keypair;
-export function kpPubkey(ctx: Ctx, kp: Keypair): Uint8Array; // 33 bytes
+2) Podspec: compile all sources directly
 
-export function signNew(ctx: Ctx, kp: Keypair, opts?: { sessionId?: Uint8Array; aad?: Uint8Array }): Sign;
-export function signSetMessage(ctx: Ctx, sign: Sign, msg: Uint8Array): void;
-export function signStep(ctx: Ctx, sign: Sign, inPeerMsg?: Uint8Array): { outMsg?: Uint8Array; done: boolean };
-export function signFinalize(ctx: Ctx, sign: Sign, fmt?: 'der'|'raw-rs'): Uint8Array;
+Here’s a working template you can drop in as ios/MaanyMpc.podspec (or at repo root; both are fine as long as s.source = { :path => '.' } resolves):
 
+require 'json'
+pkg = JSON.parse(File.read(File.join(__dir__, '..', 'package.json'))) rescue JSON.parse(File.read(File.join(__dir__, 'package.json')))
 
-N-API rules
+Pod::Spec.new do |s|
+  s.name         = 'MaanyMpc'
+  s.version      = pkg['version']
+  s.summary      = pkg['description']
+  s.homepage     = 'https://github.com/maany/maany-mpc-core'
+  s.license      = { :type => 'MIT' }
+  s.author       = { 'Maany' => 'engineering@maany.xyz' }
+  s.source       = { :path => '.' }
+  s.platform     = :ios, '13.0'
 
-Wrap native handles as napi_external with finalizers calling *_free.
+  # 1) Compile all iOS sources (no ../)
+  s.source_files = 'ios/**/*.{mm,m,swift,h,hh,hpp,c,cc,cpp,cxx}'
 
-Offload *_step and *_finalize to a libuv worker (async) to avoid blocking.
+  # 2) If your headers include relative paths, help the compiler:
+  s.header_mappings_dir = 'ios'
 
-Throw JS errors mapping from maany_mpc_error_t.
+  # 3) C++ flags / defines (mirror what CMake was doing)
+  s.pod_target_xcconfig = {
+    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+    'CLANG_CXX_LIBRARY'           => 'libc++',
+    # Add any defines you had in CMake, e.g.:
+    # 'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) MAANY_USE_OPENSSL=1 SOME_FLAG=1'
+  }
 
-6) React-Native binding (JSI/Turbo)
+  # 4) Link React and SSL; no vendored binaries
+  s.dependency 'React-Core'
+  s.dependency 'OpenSSL-Universal'
 
-File highlights
-
-bindings/rn/ios/MaanyMpc.mm: Registers JSI host object with methods mirroring Node API.
-
-bindings/rn/android/src/main/cpp/addon_jni.cc: JNI + JSI binding; loads libmaany_mpc_core.so.
-
-bindings/rn/index.ts: Same TS surface as Node.
-
-Packaging
-
-iOS: CocoaPod via MaanyMpc.podspec linking libmaany_mpc_core.a or .xcframework.
-
-Android: Gradle builds shared lib for arm64-v8a (+ optional x86_64 for emulators).
-
-7) CMake (top-level + presets)
-
-File: CMakeLists.txt (root)
-
-cmake_minimum_required(VERSION 3.22)
-project(maany_mpc_core LANGUAGES C CXX)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_subdirectory(cpp/third_party/cb-mpc EXCLUDE_FROM_ALL)
-
-add_library(maany_mpc_core
-  cpp/src/bridge.cpp
-  cpp/src/maany_mpc.c
-  cpp/src/util.cc
-)
-target_include_directories(maany_mpc_core PUBLIC cpp/include)
-target_link_libraries(maany_mpc_core PRIVATE cbmpc) # name per cb-mpc cmake target
+  s.requires_arc = true
+end
 
 
-File: CMakePresets.json (native/mac + linux)
+Notes:
 
-{
-  "version": 3,
-  "configurePresets": [
-    { "name": "default", "generator": "Ninja", "binaryDir": "build/default" }
-  ],
-  "buildPresets": [
-    { "name": "default", "configurePreset": "default" }
-  ]
+We removed s.vendored_libraries and s.vendored_frameworks. Everything compiles from source.
+
+If cb-mpc requires specific compile DEFINES that used to come from CMake (-DXXXX=1), add them under GCC_PREPROCESSOR_DEFINITIONS.
+
+3) JSI symbol wiring (match signatures)
+
+Your MaanyMpc.mm calls:
+
+maany::rn::installMaanyMpc(*runtime);
+
+
+So ensure the C++ side matches exactly:
+
+ios/cpp/MaanyMpcHostObject.h
+
+#pragma once
+#include <jsi/jsi.h>
+
+namespace maany { namespace rn {
+  void installMaanyMpc(facebook::jsi::Runtime& rt);
+}}
+
+
+ios/cpp/MaanyMpcHostObject.cpp
+
+#include "MaanyMpcHostObject.h"
+
+using namespace facebook;
+
+namespace maany { namespace rn {
+
+void installMaanyMpc(jsi::Runtime& rt) {
+  // Register HostObjects / globals here
+  // e.g., rt.global().setProperty(rt, "MaanyMpc", jsi::Object(rt));
+}
+
+}} // namespace maany::rn
+
+
+The namespace and ref qualifiers must match or Xcode will report “Undefined symbols for architecture arm64”.
+
+4) Consumer app Podfile (static pods + RN defaults)
+
+In your example app / SDK demo:
+
+platform :ios, '13.0'
+
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
+
+target 'YourApp' do
+  config = use_native_modules!
+
+  # Xcode 16 / iOS 18 friendly; avoids SwiftUICore/CoreAudioTypes noise
+  use_frameworks! :linkage => :static
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => true
+  )
+
+  # If you have any Swift in the app target, ensure at least one .swift exists.
+
+  post_install do |installer|
+    react_native_post_install(installer)
+  end
+end
+
+
+Then:
+
+cd ios
+pod repo update            # optional but helps fetch latest SSL pod
+pod install
+
+5) Remove the binary build script from your flow
+
+Delete (or ignore) the build_ios / lipo steps.
+
+Do not ship ios/dist/**.
+
+Your podspec doesn’t reference any vendored artifacts, so there’s nothing to stage.
+
+6) How to migrate CMake options you previously needed
+
+If your CMake used options like:
+
+include dirs (-I/path/to/include)
+
+defines (-DABC=1)
+
+special flags (-fno-exceptions, -fvisibility=hidden)
+
+Translate them into podspec xcconfig:
+
+s.pod_target_xcconfig = {
+  'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+  'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) ABC=1 DEF=1',
+  'OTHER_CPLUSPLUSFLAGS' => '$(inherited) -fno-exceptions',
+  'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/ios/native/cbmpc/include $(PODS_TARGET_SRCROOT)/ios/native/maany_core/include'
 }
 
 
-Node & RN subprojects add their own CMakeLists.txt that link against maany_mpc_core.
+Only add HEADER_SEARCH_PATHS if your headers are not already found relative to the source files. Keep it minimal to avoid conflicts.
 
-8) Test plan (must-pass)
-Unit (C++)
+7) Common pitfalls & fixes
 
-DER encoding round trip for a known (r,s).
+Undefined JSI symbol → your .cpp didn’t compile (wrong path) or signature mismatch. Keep sources under ios/.
 
-Compressed pubkey sanity (33 bytes, 0x02/0x03 prefix).
+Duplicate -lc++ warning → don’t add -lc++ manually; CocoaPods handles it via CLANG_CXX_LIBRARY=libc++.
 
-Opaque blob export/import idempotence.
+SwiftUICore/CoreAudioTypes link warnings → use static pods (use_frameworks! :linkage => :static) in the app’s Podfile.
 
-E2E (Node)
+OpenSSL header not found → CocoaPods should provide include paths. If not, check the exact pod version; add HEADER_SEARCH_PATHS pointing at the pod’s headers (rarely needed).
 
-Simulate device and server in one process:
+8) When not to use “build from source”
 
-DKG A↔B until both DONE, dkg_finalize() both.
+If:
 
-kp_pubkey() equality check (both sides produce same pubkey).
+Your core depends on non-portable build steps (codegen, ASM, custom scripts), or
 
-sign_* A↔B for a fixed message; verify signature with a pure JS secp lib.
+You want predictable, fast app CI builds and fewer toolchain differences,
 
-Negative tests: wrong role pairing; mutated message mid-round → expect MAANY_MPC_STATE/CRYPTO.
-
-E2E (RN)
-
-Same as Node but through JSI binding (can be a single “mock” test that runs both roles locally).
-
-9) Build scripts & commands
-
-First build (native lib):
-
-git submodule update --init --recursive
-cmake -S . -B build && cmake --build build -j
-
-
-Node addon (from bindings/node):
-
-Use cmake-js or a small CMakeLists.txt + node-gyp wrapper.
-
-Produce prebuilds for darwin-arm64, linux-x64, linux-arm64.
-
-RN
-
-iOS: pod install inside a sample app; ensure the Pod links maany_mpc_core.
-
-Android: Gradle builds .so under jniLibs/arm64-v8a.
-
-10) Security & correctness requirements
-
-Zeroization: wipe ephemeral secrets in bridge.cpp destructors and in maany_mpc_sign_free.
-
-Constant-time: do not branch on secrets in wrapper logic; leave heavy math to cb-mpc.
-
-Input validation: check buffer sizes (pubkey 33B, non-empty msg), role (device/server), protocol state.
-
-Serialization: use cb-mpc’s provided message encoding if present; otherwise clearly document the encoding used so device/server are interoperable.
-
-Versioning: expose a small maany_mpc_version() (ABI) and embed the pinned cb-mpc commit in maany_mpc_core as a string for telemetry.
-
-11) Deliverables checklist for Codex
-
- cpp/include/maany_mpc.h (as above, minimal subset).
-
- cpp/include/bridge.h + cpp/src/bridge.cpp calling cb-mpc (ECDSA 2-party).
-
- cpp/src/maany_mpc.c exporting the C ABI.
-
- bindings/node N-API addon with TS facade (index.ts) matching the API table.
-
- bindings/rn JSI module (iOS/Android) with TS facade matching Node.
-
- packages/mpc-core loader that re-exports Node/RN bindings, same TS types.
-
- E2E tests proving A↔B DKG + sign produce valid sigs (verify with independent secp lib).
-
- CI matrix that builds the core lib, Node prebuilds (3 platforms), RN libs (iOS/Android), and runs Node tests.
-
-12) Example TS usage (what SDK will call)
-import * as mpc from '@maany/mpc-core';
-
-// Device side
-const ctx = mpc.init();
-const dkgA = mpc.dkgNew(ctx, 'device', keyIdBytes, sessionId);
-let msgA = undefined, msgB = undefined, doneA=false, doneB=false;
-
-// Server side (in tests we run in-process; in prod it’s coordinator)
-const dkgB = mpc.dkgNew(ctx, 'server', keyIdBytes, sessionId);
-
-while (!doneA || !doneB) {
-  const stepA = mpc.dkgStep(ctx, dkgA, msgB);
-  msgA = stepA.outMsg; doneA = stepA.done;
-
-  const stepB = mpc.dkgStep(ctx, dkgB, msgA);
-  msgB = stepB.outMsg; doneB = stepB.done;
-}
-const kpA = mpc.dkgFinalize(ctx, dkgA);
-const kpB = mpc.dkgFinalize(ctx, dkgB);
-
-const signA = mpc.signNew(ctx, kpA, { sessionId });
-mpc.signSetMessage(ctx, signA, signBytes);
-const signB = mpc.signNew(ctx, kpB, { sessionId });
-mpc.signSetMessage(ctx, signB, signBytes);
-
-let sA, sB, doneSA=false, doneSB=false;
-while (!doneSA || !doneSB) {
-  sA = mpc.signStep(ctx, signA, sB?.outMsg);
-  sB = mpc.signStep(ctx, signB, sA?.outMsg);
-  doneSA = sA.done; doneSB = sB.done;
-}
-const sig = mpc.signFinalize(ctx, signA, 'der'); // or raw-rs
+then revert to the prebuilt XCFramework approach (previous message), and keep the build script (but output .xcframeworks, not lipo’d .a).

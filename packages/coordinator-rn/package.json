@@ -8,6 +8,13 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist"
   },
+  "files": [
+    "dist",
+    "src",
+    "android",
+    "ios",
+    "react-native.config.js"
+  ],
   "dependencies": {
     "@maany/mpc-rn": "file:../../bindings/rn",
     "@noble/hashes": "^1.4.0"

@@ -1,3 +1,6 @@
+#ifndef MAANY_MPC_HOST_OBJECT_IMPL
+#define MAANY_MPC_HOST_OBJECT_IMPL
+
 #include "MaanyMpcHostObject.h"
 
 #include <jsi/jsi.h>
@@ -10,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "maany_mpc.h"
+#include "../../../cpp/include/maany_mpc.h"
 
 namespace maany::rn {
 
@@ -818,3 +821,5 @@ void installMaanyMpc(Runtime& runtime) {
 }
 
 }  // namespace maany::rn
+
+#endif  // MAANY_MPC_HOST_OBJECT_IMPL

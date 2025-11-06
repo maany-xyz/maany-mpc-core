@@ -14,25 +14,23 @@ Pod::Spec.new do |s|
 
   s.source_files = [
     'MaanyMpc.mm',
-    '../cpp/*.cpp',
-    '../../cpp/include/**/*.h',
-    '../../cpp/src/**/*.{cc,cpp}',
-    '../../cpp/third_party/cb-mpc/src/**/*.{cc,cpp,c}',
-    '../../cpp/third_party/cb-mpc/src/**/*.h'
+    '../cpp/MaanyMpcHostObject.cpp',
+    '../cpp/MaanyMpcHostObject.h'
   ]
 
-  s.exclude_files = [
-    '../../cpp/third_party/cb-mpc/src/tests/**'
+  s.vendored_libraries = [
+    'dist/universal/libmaany_mpc_core.a',
+    'dist/universal/libcbmpc.a'
   ]
 
-  s.public_header_files = ['../cpp/MaanyMpcHostObject.h', '../../cpp/include/**/*.h']
-  s.header_mappings_dir = '../../cpp/include'
+  s.vendored_frameworks = ['dist/openssl.xcframework']
+  s.requires_arc = true
 
-  s.requires_arc = false
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
-    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/../cpp $(PODS_TARGET_SRCROOT)/../../cpp/include $(PODS_TARGET_SRCROOT)/../../cpp/third_party/cb-mpc/src'
+    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/../cpp',
+    'LIBRARY_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/dist/universal'
   }
 
   s.dependency 'React-Core'

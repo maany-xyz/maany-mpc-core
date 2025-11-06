@@ -3,8 +3,7 @@
 #import <React/RCTLog.h>
 #import <React/RCTUtils.h>
 
-#import "MaanyMpcHostObject.h"
-
+#import "../cpp/MaanyMpcHostObject.h"
 using namespace facebook;
 
 @interface MaanyMpc : NSObject <RCTBridgeModule>
@@ -36,8 +35,8 @@ RCT_EXPORT_METHOD(install)
     return;
   }
 
-  std::shared_ptr<jsi::Runtime> runtime = [cxxBridge runtime];
-  if (!runtime) {
+  jsi::Runtime *runtime = reinterpret_cast<jsi::Runtime *>(cxxBridge.runtime);
+  if (runtime == nullptr) {
     RCTLogError(@"MaanyMpc: JSI runtime not available");
     return;
   }
