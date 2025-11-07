@@ -28,12 +28,12 @@ target_link_libraries(maany_mpc_core PRIVATE cbmpc)
 
 # JSI / JNI bridge
 add_library(maany_mpc_rn SHARED
-    ${PROJECT_ROOT}/bindings/rn/cpp/MaanyMpcHostObject.cpp
+    ${PROJECT_ROOT}/bindings/rn/ios/cpp/MaanyMpcHostObject.cpp
     ${CMAKE_CURRENT_LIST_DIR}/addon_jni.cpp
 )
 
 target_include_directories(maany_mpc_rn PRIVATE
-    ${PROJECT_ROOT}/bindings/rn/cpp
+    ${PROJECT_ROOT}/bindings/rn/ios/cpp
     ${PROJECT_ROOT}/cpp/include
 )
 

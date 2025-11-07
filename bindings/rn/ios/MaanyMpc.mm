@@ -3,7 +3,7 @@
 #import <React/RCTLog.h>
 #import <React/RCTUtils.h>
 
-#import "../cpp/MaanyMpcHostObject.h"
+#import "cpp/MaanyMpcHostObject.h"
 using namespace facebook;
 
 @interface MaanyMpc : NSObject <RCTBridgeModule>

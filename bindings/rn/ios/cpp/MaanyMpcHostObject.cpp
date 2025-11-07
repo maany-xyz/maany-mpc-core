@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "../../../cpp/include/maany_mpc.h"
+#include "../../../../cpp/include/maany_mpc.h"
 
 namespace maany::rn {
 

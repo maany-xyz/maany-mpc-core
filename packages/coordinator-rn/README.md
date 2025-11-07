@@ -108,8 +108,8 @@ In your React Native app:
 ## Development Notes
 
 - Run `./scripts/build_ios_core.sh` in this repo before running `pod install`
-  in your React Native app so the prebuilt MPC + OpenSSL libraries are staged
-  under `bindings/rn/ios/dist`.
+  in your React Native app so the prebuilt XCFrameworks (Maany MPC core,
+  cb-mpc, and OpenSSL) are staged under `bindings/rn/ios/dist`.
 - TypeScript builds target ES2020 and CommonJS for compatibility with Metro.
 - The package ships ambient type shims for `react-native` so standalone builds
   work without pulling the full RN type definitions.

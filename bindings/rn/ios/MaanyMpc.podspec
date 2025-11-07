@@ -14,24 +14,36 @@ Pod::Spec.new do |s|
 
   s.source_files = [
     'MaanyMpc.mm',
-    '../cpp/MaanyMpcHostObject.cpp',
-    '../cpp/MaanyMpcHostObject.h'
+    'cpp/**/*.{h,hh,hpp,c,cc,cpp,cxx}'
   ]
+  s.exclude_files = 'dist/**/*'
 
   s.vendored_libraries = [
-    'dist/universal/libmaany_mpc_core.a',
-    'dist/universal/libcbmpc.a'
+    'dist/libmaany_mpc_core.xcframework/ios-arm64/libmaany_mpc_core.a',
+    'dist/libmaany_mpc_core.xcframework/ios-arm64_x86_64-simulator/libmaany_mpc_core.a',
+    'dist/libcbmpc.xcframework/ios-arm64/libcbmpc.a',
+    'dist/libcbmpc.xcframework/ios-arm64_x86_64-simulator/libcbmpc.a'
   ]
-
-  s.vendored_frameworks = ['dist/openssl.xcframework']
+  s.vendored_frameworks = [
+    'dist/openssl.xcframework'
+  ]
   s.requires_arc = true
 
-  s.pod_target_xcconfig = {
+  maany_root = '$(PODS_ROOT)/../../node_modules/@maany/mpc-rn/ios'
+  xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
-    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/../cpp',
-    'LIBRARY_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/dist/universal'
+    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/../../../cpp/include',
+    'LIBRARY_SEARCH_PATHS[sdk=iphoneos*]' => "$(inherited) #{maany_root}/dist/libmaany_mpc_core.xcframework/ios-arm64 #{maany_root}/dist/libcbmpc.xcframework/ios-arm64",
+    'LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]' => "$(inherited) #{maany_root}/dist/libmaany_mpc_core.xcframework/ios-arm64_x86_64-simulator #{maany_root}/dist/libcbmpc.xcframework/ios-arm64_x86_64-simulator",
+    'FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]' => "$(inherited) #{maany_root}/dist/openssl.xcframework/ios-arm64_arm64e",
+    'FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]' => "$(inherited) #{maany_root}/dist/openssl.xcframework/ios-arm64_x86_64-simulator",
+    'OTHER_LDFLAGS[sdk=iphoneos*]' => "$(inherited) -force_load #{maany_root}/dist/libmaany_mpc_core.xcframework/ios-arm64/libmaany_mpc_core.a -force_load #{maany_root}/dist/libcbmpc.xcframework/ios-arm64/libcbmpc.a -framework openssl",
+    'OTHER_LDFLAGS[sdk=iphonesimulator*]' => "$(inherited) -force_load #{maany_root}/dist/libmaany_mpc_core.xcframework/ios-arm64_x86_64-simulator/libmaany_mpc_core.a -force_load #{maany_root}/dist/libcbmpc.xcframework/ios-arm64_x86_64-simulator/libcbmpc.a -framework openssl"
   }
+
+  s.pod_target_xcconfig = xcconfig
+  s.user_target_xcconfig = xcconfig
 
   s.dependency 'React-Core'
 end
