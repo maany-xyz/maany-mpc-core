@@ -1,0 +1,12 @@
+{
+  "name": "@maany/examples-node-coordinator-server",
+  "private": true,
+  "version": "0.0.1",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@maany/mpc-coordinator-node": "file:../../packages/coordinator-node"
+  }
+}

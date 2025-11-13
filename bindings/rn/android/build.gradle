@@ -1,18 +1,34 @@
 apply plugin: "com.android.library"
 
+def opensslRootDir = project.layout.projectDirectory.dir("third-party/openssl").asFile
+def supportedAbis = ["arm64-v8a"]
+
+def cmakeArgs = [
+        "-DANDROID_STL=c++_shared",
+        "-DOPENSSL_ROOT_DIR=${opensslRootDir.absolutePath}"
+]
+
 android {
     namespace "com.maany.mpc"
-    compileSdkVersion 33
+    compileSdkVersion rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 33
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         consumerProguardFiles "consumer-rules.pro"
+        ndk {
+            abiFilters.addAll(supportedAbis)
+        }
         externalNativeBuild {
             cmake {
                 targets "maany_mpc_rn"
+                arguments.addAll(cmakeArgs)
             }
         }
+    }
+
+    buildFeatures {
+        prefab true
     }
 
     externalNativeBuild {
@@ -29,6 +45,30 @@ android {
     }
 }
 
+def ensureTasks = supportedAbis.collect { abi ->
+    def sanitized = abi.replaceAll(/[^A-Za-z0-9]/, "_")
+    def capitalized = sanitized.split("_").findAll { !it.isEmpty() }
+            .collect { it.substring(0, 1).toUpperCase() + it.substring(1) }
+            .join("")
+    def taskName = "ensureOpenSsl${capitalized}"
+    tasks.register(taskName) {
+        def sliceDir = new File(opensslRootDir, abi)
+        def includeDir = new File(sliceDir, "include")
+        def libFile = new File(sliceDir, "lib/libcrypto.a")
+        outputs.dir(sliceDir)
+        doLast {
+            if (!includeDir.exists() || !libFile.exists()) {
+                throw new GradleException("Missing OpenSSL artifacts for ${abi} under ${sliceDir}. Build them via scripts/build_android_openssl.sh or provide prebuilt archives.")
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("preBuild") }.configureEach {
+    ensureTasks.each { dependsOn it }
+}
+
 dependencies {
-    implementation "com.facebook.react:react-native:"
+    implementation('com.facebook.react:react-android')
+    implementation('com.facebook.fbjni:fbjni')
 }

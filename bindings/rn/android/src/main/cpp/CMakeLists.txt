@@ -9,7 +9,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(fbjni REQUIRED CONFIG)
 find_package(ReactAndroid REQUIRED CONFIG)
 
-get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../.." ABSOLUTE)
+get_filename_component(MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}" REALPATH)
+get_filename_component(PROJECT_ROOT "${MODULE_DIR}/../../../../../../" ABSOLUTE)
 
 # Build the core MPC library for Android
 add_subdirectory(${PROJECT_ROOT}/cpp/third_party/cb-mpc ${CMAKE_CURRENT_BINARY_DIR}/cb-mpc EXCLUDE_FROM_ALL)

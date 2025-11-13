@@ -1,7 +1,7 @@
 const path = require('node:path');
-const coordinatorPkg = require('../../packages/coordinator/dist');
-const transportPkg = require('../../packages/coordinator/dist/transport');
-const storagePkg = require('../../packages/coordinator/dist/storage');
+const coordinatorPkg = require('../../packages/coordinator-node/dist');
+const transportPkg = require('../../packages/coordinator-node/dist/transport');
+const storagePkg = require('../../packages/coordinator-node/dist/storage');
 const { createCoordinator, pubkeyToCosmosAddress, makeSignBytes, sha256 } = coordinatorPkg;
 const transport = new transportPkg.InMemoryTransport();
 const storage = new storagePkg.InMemoryShareStorage();

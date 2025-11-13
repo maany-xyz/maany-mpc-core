@@ -1,0 +1,7 @@
+libdir=/Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn/android/third-party/openssl/arm64-v8a/lib
+includedir=/Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn/android/third-party/openssl/arm64-v8a/include
+
+Name: OpenSSL
+Description: Secure Sockets Layer and cryptography libraries and tools
+Version: 3.3.1
+Requires: libssl libcrypto

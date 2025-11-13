@@ -24,23 +24,21 @@ public class MaanyMpcModule extends ReactContextBaseJavaModule {
     return "MaanyMpc";
   }
 
-  @ReactMethod
-  public void install() {
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  public boolean install() {
     if (installed) {
-      return;
+      return true;
     }
 
     final ReactApplicationContext context = getReactApplicationContext();
-    context.runOnJSQueueThread(
-        () -> {
-          JavaScriptContextHolder holder = context.getJavaScriptContextHolder();
-          long runtimePtr = holder == null ? 0 : holder.get();
-          if (runtimePtr == 0) {
-            return;
-          }
-          nativeInstall(runtimePtr);
-          installed = true;
-        });
+    JavaScriptContextHolder holder = context.getJavaScriptContextHolder();
+    long runtimePtr = holder == null ? 0 : holder.get();
+    if (runtimePtr == 0) {
+      throw new RuntimeException("MaanyMpc: JSI runtime not available");
+    }
+    nativeInstall(runtimePtr);
+    installed = true;
+    return true;
   }
 
   private static native void nativeInstall(long runtimePtr);

@@ -2,11 +2,11 @@ apply plugin: 'com.android.library'
 
 android {
     namespace 'com.maany.mpc.coordinator'
-    compileSdkVersion 33
+    compileSdkVersion rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        minSdkVersion 21
-        targetSdkVersion 33
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         consumerProguardFiles 'consumer-rules.pro'
     }
 
@@ -19,6 +19,6 @@ android {
 }
 
 dependencies {
-    implementation 'com.facebook.react:react-native+'
+    implementation('com.facebook.react:react-android')
     implementation 'androidx.biometric:biometric:1.2.0-alpha05'
 }
