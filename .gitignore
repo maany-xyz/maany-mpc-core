@@ -7,3 +7,8 @@ bindings/rn-bare/android/native-libs/*
 bindings/rn-bare/android/build/
 bindings/rn-bare/android/.cxx/
 .docs
+
+packages/coordinator-rn/node_modules
+packages/coordinator-rn/dist
+packages/coordinator-node/node_modules
+packages/coordinator-node/dist
