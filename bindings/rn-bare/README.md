@@ -1,4 +1,4 @@
-# @maany/mpc-rn-bare
+# @maanyio/mpc-rn-bare
 
 React Native bindings for the Maany MPC core library that download their native payload during installation. The JavaScript/TypeScript surface stays tiny while the iOS static libraries, OpenSSL XCFramework, and Android static libraries are fetched on-demand from release archives.
 
@@ -6,7 +6,7 @@ React Native bindings for the Maany MPC core library that download their native 
 
 1. Install the packages that depend on the bindings:
    ```bash
-   npm install @maany/mpc-rn-bare @maany/mpc-coordinator-rn
+   npm install @maanyio/mpc-rn-bare @maany/mpc-coordinator-rn
    ```
 2. Run `npm install` / `yarn install` as usual. The `postinstall` hook executes `npm run fetch:native` which downloads the prebuilt archives described below. Set the environment variables first if you host the artifacts yourself.
 3. Generate the iOS project (Expo prebuild or your usual React Native workflow) and run `pod install` once so CocoaPods can see the downloaded binaries.
@@ -66,7 +66,7 @@ post_install do |installer|
         if [ -z "${FRAMEWORKS_FOLDER_PATH:-}" ]; then
           exit 0
         fi
-        MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maany/mpc-rn-bare/ios"
+        MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maanyio/mpc-rn-bare/ios"
         if [[ "${PLATFORM_NAME}" == "iphonesimulator" ]]; then
           SLICE="ios-arm64_x86_64-simulator"
         else
@@ -120,7 +120,7 @@ module.exports = function withMaanyOpenSSL(config) {
         if [ -z "${FRAMEWORKS_FOLDER_PATH:-}" ]; then
           exit 0
         fi
-        MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maany/mpc-rn-bare/ios"
+    MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maanyio/mpc-rn-bare/ios"
         if [[ "${PLATFORM_NAME}" == "iphonesimulator" ]]; then
           SLICE="ios-arm64_x86_64-simulator"
         else
