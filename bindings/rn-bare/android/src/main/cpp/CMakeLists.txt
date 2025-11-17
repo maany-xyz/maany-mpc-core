@@ -10,7 +10,7 @@ find_package(fbjni REQUIRED CONFIG)
 find_package(ReactAndroid REQUIRED CONFIG)
 
 get_filename_component(MODULE_DIR "${CMAKE_CURRENT_LIST_DIR}" REALPATH)
-get_filename_component(PACKAGE_ROOT "${MODULE_DIR}/../../.." REALPATH)
+get_filename_component(PACKAGE_ROOT "${MODULE_DIR}/../../../.." REALPATH)
 
 set(MAANY_CPP_DIR "${PACKAGE_ROOT}/ios/cpp")
 set(MAANY_INCLUDE_DIR "${MAANY_CPP_DIR}/include")

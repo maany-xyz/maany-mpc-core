@@ -1,7 +1,7 @@
-# @maany/mpc-coordinator-rn
+# @maanyio/mpc-coordinator-rn
 
 React Native coordinator utilities for the Maany MPC stack. This package wraps the
-`@maany/mpc-rn-bare` JSI binding and exposes the same high-level orchestration helpers
+`@maanyio/mpc-rn-bare` JSI binding and exposes the same high-level orchestration helpers
 available in the Node coordinator so that in-app wallet SDKs can drive end-to-end
 DKG, signing, and refresh flows entirely on-device.
 
@@ -9,7 +9,7 @@ DKG, signing, and refresh flows entirely on-device.
 
 - `createCoordinator` – constructs a coordinator tied to a transport + share
   storage implementation and returns helpers to run DKG and signing rounds on top
-  of the `@maany/mpc-rn-bare` binding.
+  of the `@maanyio/mpc-rn-bare` binding.
 - Session helpers – `runDkg` and `runSign` functions compatible with the Node
   coordinator semantics but implemented without Node built-ins.
 - Cosmos utilities – `pubkeyToCosmosAddress`, `makeSignBytes`, and `sha256`
@@ -59,7 +59,7 @@ In your React Native app:
    npm install ../maany-mpc-core/bindings/rn
    ```
 
-   Ensure `pod install` runs in the iOS project after adding `@maany/mpc-rn-bare`.
+   Ensure `pod install` runs in the iOS project after adding `@maanyio/mpc-rn-bare`.
 
 2. Initialize the coordinator:
 
@@ -70,7 +70,7 @@ In your React Native app:
      InMemoryShareStorage,
      SecureShareStorage,
      WebSocketTransport,
-   } from '@maany/mpc-coordinator-rn';
+   } from '@maanyio/mpc-coordinator-rn';
 
    const coordinator = createCoordinator({
      transport: new InMemoryTransport(), // replace with a real transport in production
@@ -110,7 +110,7 @@ In your React Native app:
 - Run `./scripts/build_ios_core.sh` in this repo before running `pod install`
   in your React Native app so the prebuilt XCFrameworks (Maany MPC core,
   cb-mpc, and OpenSSL) are staged under `bindings/rn/ios/dist`.
-- Using the binding requires CocoaPods 1.12+; the `@maany/mpc-rn-bare` podspec now
+- Using the binding requires CocoaPods 1.12+; the `@maanyio/mpc-rn-bare` podspec now
   links the static archives, embeds OpenSSL, and installs the necessary build
   phase automatically, so consumer apps only need to run `pod install`.
 - TypeScript builds target ES2020 and CommonJS for compatibility with Metro.

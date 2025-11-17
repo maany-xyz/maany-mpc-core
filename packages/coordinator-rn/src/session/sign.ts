@@ -1,4 +1,4 @@
-import * as mpc from '@maany/mpc-rn-bare';
+import * as mpc from '@maanyio/mpc-rn-bare';
 import type { Transport } from '../transport';
 import { cloneBytes, optionalClone } from '../utils/bytes';
 

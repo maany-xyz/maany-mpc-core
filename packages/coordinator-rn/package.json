@@ -1,7 +1,6 @@
 {
-  "name": "@maany/mpc-coordinator-rn",
+  "name": "@maanyio/mpc-coordinator-rn",
   "version": "0.1.0",
-  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -17,7 +16,7 @@
     "react-native.config.js"
   ],
   "dependencies": {
-    "@maany/mpc-rn-bare": "file:../../bindings/rn-bare",
+    "@maanyio/mpc-rn-bare": "^0.1.2",
     "@noble/hashes": "^1.4.0"
   },
   "devDependencies": {

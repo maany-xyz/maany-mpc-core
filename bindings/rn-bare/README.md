@@ -53,35 +53,41 @@ The `MaanyMpc.podspec` loads the static libraries from `ios/dist` and exposes th
 
 ```ruby
 post_install do |installer|
-  installer.aggregate_targets.each do |aggregate|
-    next unless aggregate.pod_targets.any? { |t| t.name == 'MaanyMpc' }
+   post_install do |installer|
+    installer.aggregate_targets.each do |aggregate|
+        next unless aggregate.pod_targets.any? { |t| t.name == 'MaanyMpc' }
 
-    aggregate.user_targets.each do |user_target|
-      next if user_target.shell_script_build_phases.any? { |p| p.name == '[Maany] Embed OpenSSL' }
-
-      phase = user_target.new_shell_script_build_phase('[Maany] Embed OpenSSL')
-      phase.shell_path = '/bin/sh'
-      phase.shell_script = <<~'SH'
-        set -euo pipefail
-        if [ -z "${FRAMEWORKS_FOLDER_PATH:-}" ]; then
-          exit 0
-        fi
-        MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maanyio/mpc-rn-bare/ios"
-        if [[ "${PLATFORM_NAME}" == "iphonesimulator" ]]; then
-          SLICE="ios-arm64_x86_64-simulator"
-        else
-          SLICE="ios-arm64_arm64e"
-        fi
-        FRAMEWORK_SRC="${MAANY_ROOT}/dist/openssl.xcframework/${SLICE}/openssl.framework"
-        FRAMEWORK_DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/openssl.framework"
-        rm -rf "${FRAMEWORK_DEST}"
-        mkdir -p "$(dirname "${FRAMEWORK_DEST}")"
-        cp -R "${FRAMEWORK_SRC}" "${FRAMEWORK_DEST}"
-      SH
-    end
+        aggregate.user_targets.each do |user_target|
+          phase = user_target.shell_script_build_phases.find { |p| p.name == '[Maany] Embed OpenSSL' }
+          phase ||= user_target.new_shell_script_build_phase('[Maany] Embed OpenSSL')
+          phase.shell_path = '/bin/sh'
+          phase.shell_script = <<~'SH'
+            set -euo pipefail
+            if [ -z "${FRAMEWORKS_FOLDER_PATH:-}" ]; then
+              exit 0
+            fi
+            # Package lives under @maanyio, so make sure we copy from the correct path
+            MAANY_ROOT="${PODS_ROOT}/../../node_modules/@maanyio/mpc-rn-bare/ios"
+            if [[ "${PLATFORM_NAME}" == "iphonesimulator" ]]; then
+              SLICE="ios-arm64_x86_64-simulator"
+            else
+              SLICE="ios-arm64_arm64e"
+            fi
+            FRAMEWORK_SRC="${MAANY_ROOT}/dist/openssl.xcframework/${SLICE}/openssl.framework"
+            FRAMEWORK_DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/openssl.framework"
+            rm -rf "${FRAMEWORK_DEST}"
+            mkdir -p "$(dirname "${FRAMEWORK_DEST}")"
+            cp -R "${FRAMEWORK_SRC}" "${FRAMEWORK_DEST}"
+          SH
+        end
+      end
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => ccache_enabled?(podfile_properties),
+    )
   end
-
-  react_native_post_install(installer)
 end
 ```
 
