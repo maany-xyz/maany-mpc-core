@@ -3,7 +3,7 @@ import type { ShareStorage } from '../storage';
 import * as mpc from '@maany/mpc-node';
 
 export interface DkgResult {
-  deviceKeypair: mpc.Keypair;
+  deviceKeypair: mpc.Keypair | null;
   serverKeypair: mpc.Keypair;
 }
 
@@ -12,49 +12,89 @@ export interface DkgOptions {
   storage: ShareStorage;
   keyId?: Uint8Array | Buffer;
   sessionId?: Uint8Array | Buffer;
+  mode?: 'dual' | 'server-only';
 }
 
 export async function runDkg(ctx: mpc.Ctx, opts: DkgOptions): Promise<DkgResult> {
-  const dkgDevice = mpc.dkgNew(ctx, {
-    role: 'device',
-    keyId: opts.keyId ? Buffer.from(opts.keyId) : undefined,
-    sessionId: opts.sessionId ? Buffer.from(opts.sessionId) : undefined,
-  });
+  const simulateDevice = opts.mode !== 'server-only';
+  console.log('[runDkg] mode =', opts.mode ?? 'dual', 'simulateDevice =', simulateDevice);
+  const normalizedKeyId = opts.keyId ? Buffer.from(opts.keyId) : undefined;
+  const normalizedSessionId = opts.sessionId ? Buffer.from(opts.sessionId) : undefined;
+
   const dkgServer = mpc.dkgNew(ctx, {
     role: 'server',
-    keyId: opts.keyId ? Buffer.from(opts.keyId) : undefined,
-    sessionId: opts.sessionId ? Buffer.from(opts.sessionId) : undefined,
+    keyId: normalizedKeyId,
+    sessionId: normalizedSessionId,
   });
 
-  async function step(participant: Participant, handle: mpc.Dkg, inbound: Uint8Array | null) {
-    const res = await mpc.dkgStep(ctx, handle, inbound ?? undefined);
-    if (res.outMsg) {
-      await opts.transport.send({ participant: participant === 'device' ? 'server' : 'device', payload: res.outMsg });
+  let deviceKeypair: mpc.Keypair | null = null;
+
+  if (simulateDevice) {
+    const dkgDevice = mpc.dkgNew(ctx, {
+      role: 'device',
+      keyId: normalizedKeyId,
+      sessionId: normalizedSessionId,
+    });
+
+    async function step(participant: Participant, handle: mpc.Dkg, inbound: Uint8Array | null) {
+      const res = await mpc.dkgStep(ctx, handle, inbound ?? undefined);
+      if (res.outMsg) {
+        await opts.transport.send({ participant: participant === 'device' ? 'server' : 'device', payload: res.outMsg });
+      }
+      return res.done;
     }
-    return res.done;
+
+    let deviceDone = false;
+    let serverDone = false;
+
+    for (let i = 0; i < 128 && !(deviceDone && serverDone); ++i) {
+      if (!deviceDone) {
+        const inbound = await opts.transport.receive('device');
+        deviceDone = await step('device', dkgDevice, inbound);
+      }
+      if (!serverDone) {
+        const inbound = await opts.transport.receive('server');
+        serverDone = await step('server', dkgServer, inbound);
+      }
+    }
+
+    deviceKeypair = mpc.dkgFinalize(ctx, dkgDevice);
+  } else {
+    const waitForDeviceMessage = async (): Promise<Uint8Array> => {
+      while (true) {
+        const next = await opts.transport.receive('server');
+        if (next) {
+          console.log(`[server-only dkg] received ${next.length} bytes from device`);
+          return next;
+        }
+        console.log('[server-only dkg] waiting for device frame...');
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    };
+
+    let inbound: Uint8Array | undefined;
+    for (let i = 0; i < 256; ++i) {
+      console.log(`[server-only dkg] round=${i} inbound=${inbound ? inbound.length : 0}`);
+      const res = await mpc.dkgStep(ctx, dkgServer, inbound);
+      inbound = undefined;
+      if (res.outMsg) {
+        console.log(`[server-only dkg] sending ${res.outMsg.length} bytes to device`);
+        await opts.transport.send({ participant: 'device', payload: res.outMsg });
+      }
+      if (res.done) {
+        console.log('[server-only dkg] done');
+        break;
+      }
+      inbound = await waitForDeviceMessage();
+    }
   }
 
-  let deviceDone = false;
-  let serverDone = false;
-
-  for (let i = 0; i < 128 && !(deviceDone && serverDone); ++i) {
-    if (!deviceDone) {
-      const inbound = await opts.transport.receive('device');
-      deviceDone = await step('device', dkgDevice, inbound);
-    }
-    if (!serverDone) {
-      const inbound = await opts.transport.receive('server');
-      serverDone = await step('server', dkgServer, inbound);
-    }
-  }
-
-  const deviceKeypair = mpc.dkgFinalize(ctx, dkgDevice);
   const serverKeypair = mpc.dkgFinalize(ctx, dkgServer);
 
-  const deviceBlob = mpc.kpExport(ctx, deviceKeypair);
   const serverBlob = mpc.kpExport(ctx, serverKeypair);
-  const keyId = Buffer.from(deviceBlob).toString('hex');
-  await opts.storage.save({ keyId, blob: deviceBlob });
+  const keyId = normalizedKeyId
+    ? Buffer.from(normalizedKeyId).toString('hex')
+    : Buffer.from(serverBlob).toString('hex');
   await opts.storage.save({ keyId: `${keyId}:server`, blob: serverBlob });
 
   return { deviceKeypair, serverKeypair };

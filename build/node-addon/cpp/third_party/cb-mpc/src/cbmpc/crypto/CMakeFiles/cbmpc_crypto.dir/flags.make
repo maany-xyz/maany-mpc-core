@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -DNDEBUG
 
-CXX_INCLUDES = -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src -I/opt/homebrew/include -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src/cbmpc/crypto/../../../vendors
+CXX_INCLUDES = -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src/cbmpc/crypto/../../../vendors -isystem /opt/homebrew/include
 
 CXX_FLAGSarm64 =  -O3 -std=c++17 -fPIC -fvisibility=hidden -fno-operator-names -Wno-attributes -Wno-null-dereference -Wno-parentheses -Wno-reorder -Wno-missing-braces -Wno-switch -Wno-switch-enum -Wno-sign-compare -Wno-strict-overflow -Wno-unused -Wno-parentheses -Werror -Wno-shorten-64-to-32 -DNO_DEPRECATED_OPENSSL -Wno-tautological-undefined-compare -Wno-\#pragma-messages -Wno-vla-extension -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC
 

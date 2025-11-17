@@ -1,0 +1,78 @@
+apply plugin: "com.android.library"
+
+def nativeLibRoot = project.layout.projectDirectory.dir("native-libs").asFile
+def supportedAbis = ["arm64-v8a"]
+
+def cmakeArgs = [
+        "-DANDROID_STL=c++_shared"
+]
+
+android {
+    namespace "com.maany.mpc"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        consumerProguardFiles "consumer-rules.pro"
+        ndk {
+            abiFilters.addAll(supportedAbis)
+        }
+        externalNativeBuild {
+            cmake {
+                targets "maany_mpc_rn"
+                arguments.addAll(cmakeArgs)
+            }
+        }
+    }
+
+    buildFeatures {
+        prefab true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ["src/main/java"]
+            manifest.srcFile "src/main/AndroidManifest.xml"
+        }
+    }
+}
+
+def ensureTasks = supportedAbis.collect { abi ->
+    def sanitized = abi.replaceAll(/[^A-Za-z0-9]/, "_")
+    def capitalized = sanitized.split("_").findAll { !it.isEmpty() }
+            .collect { it.substring(0, 1).toUpperCase() + it.substring(1) }
+            .join("")
+    def taskName = "ensureMaanyNativeLibs${capitalized}"
+    tasks.register(taskName) {
+        def sliceDir = new File(nativeLibRoot, abi)
+        def required = [
+                new File(sliceDir, "libmaany_mpc_core.a"),
+                new File(sliceDir, "libcbmpc.a"),
+                new File(sliceDir, "libcrypto.a")
+        ]
+        outputs.dir(sliceDir)
+        doLast {
+            required.each { file ->
+                if (!file.exists()) {
+                    throw new GradleException("Missing native artifact ${file}. Run npm run fetch:native or provide MAANY_MPC_ANDROID_ARCHIVE before building.")
+                }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("preBuild") }.configureEach {
+    ensureTasks.each { dependsOn it }
+}
+
+dependencies {
+    implementation('com.facebook.react:react-android')
+    implementation('com.facebook.fbjni:fbjni')
+}

@@ -1,0 +1,53 @@
+0 verbose cli /Users/markokuncic/.nvm/versions/node/v24.9.0/bin/node /Users/markokuncic/.nvm/versions/node/v24.9.0/bin/npm
+1 info using npm@11.6.2
+2 info using node@v24.9.0
+3 silly config load:file:/Users/markokuncic/.nvm/versions/node/v24.9.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn-bare/.npmrc
+5 silly config load:file:/Users/markokuncic/.nvm/versions/node/v24.9.0/etc/npmrc
+6 verbose title npm pack
+7 verbose argv "pack" "--dry-run"
+8 verbose logfile logs-max:10 dir:/Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn-bare/.npm/_logs/2025-11-16T20_20_05_259Z-
+9 verbose logfile /Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn-bare/.npm/_logs/2025-11-16T20_20_05_259Z-debug-0.log
+10 silly logfile done cleaning log files
+11 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with ENOTFOUND
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 notice
+14 notice 📦  @maany/mpc-rn-bare@0.1.0
+15 notice Tarball Contents
+16 notice 2.0kB MaanyMpc.podspec
+16 notice 7.0kB README.md
+16 notice 2.2kB android/build.gradle
+16 notice 44B android/consumer-rules.pro
+16 notice 0B android/native-libs/.gitkeep
+16 notice 171B android/src/main/AndroidManifest.xml
+16 notice 380B android/src/main/cpp/addon_jni.cpp
+16 notice 2.1kB android/src/main/cpp/CMakeLists.txt
+16 notice 1.2kB android/src/main/java/com/maany/mpc/MaanyMpcModule.java
+16 notice 801B android/src/main/java/com/maany/mpc/MaanyMpcPackage.java
+16 notice 4.2kB index.ts
+16 notice 3.2kB ios/cpp/include/bridge.h
+16 notice 9.2kB ios/cpp/include/maany_mpc.h
+16 notice 29.6kB ios/cpp/MaanyMpcHostObject.cpp
+16 notice 117B ios/cpp/MaanyMpcHostObject.h
+16 notice 0B ios/dist/.gitkeep
+16 notice 881B ios/MaanyMpc.mm
+16 notice 39B ios/MaanyMpc.podspec
+16 notice 609B native-artifacts.json
+16 notice 517B package.json
+16 notice 4.3kB scripts/fetch-native-artifacts.cjs
+17 notice Tarball Details
+18 notice name: @maany/mpc-rn-bare
+19 notice version: 0.1.0
+20 notice filename: maany-mpc-rn-bare-0.1.0.tgz
+21 notice package size: 16.9 kB
+22 notice unpacked size: 68.5 kB
+23 notice shasum: db252e0de5a75238ef4065e549e5b2098d40b4ae
+24 notice integrity: sha512-5LGDvUjTA/J44[...]0BiBg3jE9/HUg==
+25 notice total files: 21
+26 notice
+27 verbose cwd /Users/markokuncic/Desktop/Tools/maany-mpc-core/bindings/rn-bare
+28 verbose os Darwin 24.3.0
+29 verbose node v24.9.0
+30 verbose npm  v11.6.2
+31 verbose exit 0
+32 info ok

@@ -12,7 +12,10 @@ export interface CoordinatorOptions {
 export interface Coordinator {
   readonly options: CoordinatorOptions;
   initContext(): mpc.Ctx;
-  runDkg(ctx: mpc.Ctx, opts?: { keyId?: Uint8Array; sessionId?: Uint8Array }): ReturnType<typeof runDkg>;
+  runDkg(
+    ctx: mpc.Ctx,
+    opts?: { keyId?: Uint8Array; sessionId?: Uint8Array; mode?: 'dual' | 'server-only' }
+  ): ReturnType<typeof runDkg>;
   runSign(
     ctx: mpc.Ctx,
     device: mpc.Keypair,
@@ -33,6 +36,7 @@ export function createCoordinator(options: CoordinatorOptions): Coordinator {
         storage: options.storage,
         keyId: extraOpts.keyId ? Buffer.from(extraOpts.keyId) : undefined,
         sessionId: extraOpts.sessionId ? Buffer.from(extraOpts.sessionId) : undefined,
+        mode: extraOpts.mode,
       });
     },
     runSign(ctx, device, server, signOpts) {

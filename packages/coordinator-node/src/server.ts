@@ -33,6 +33,7 @@ interface SessionState {
   coordinator: Coordinator;
   ctx: mpc.Ctx;
   socket?: WebSocket;
+  serverSocket?: WebSocket;
   intent: SessionIntent;
   token?: string;
 }
@@ -110,8 +111,13 @@ export class CoordinatorServer extends EventEmitter {
       this.sessions.set(sessionId, state);
     }
 
-    state.transport.setSocket('device', socket);
-    state.socket = socket;
+    if (hello.role === 'device') {
+      state.transport.setSocket('device', socket);
+      state.socket = socket;
+    } else {
+      state.transport.setSocket('server', socket);
+      state.serverSocket = socket;
+    }
     state.intent = this.mapIntent(hello);
     state.token = hello.token;
 

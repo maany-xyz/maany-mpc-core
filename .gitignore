@@ -1,2 +1,8 @@
 build/
 bindings/rn/ios/dist/
+bindings/rn-bare/ios/dist/*
+!bindings/rn-bare/ios/dist/.gitkeep
+bindings/rn-bare/android/native-libs/*
+!bindings/rn-bare/android/native-libs/.gitkeep
+bindings/rn-bare/android/build/
+bindings/rn-bare/android/.cxx/

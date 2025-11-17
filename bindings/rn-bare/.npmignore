@@ -1,0 +1,5 @@
+# Native binaries are downloaded via postinstall
+ios/dist/
+android/native-libs/
+android/build/
+android/.cxx/

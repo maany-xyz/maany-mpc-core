@@ -29,7 +29,9 @@ export class WebSocketTransport implements Transport {
 
     socket.on('message', (data) => {
       const target = participant === 'device' ? 'server' : 'device';
-      this.queues[target].push(toUint8Array(data));
+      const payload = toUint8Array(data);
+      console.log(`[ws-transport] inbound from ${participant} -> enqueue for ${target} (${payload.length} bytes)`);
+      this.queues[target].push(payload);
     });
 
     socket.once('close', () => {
@@ -38,16 +40,28 @@ export class WebSocketTransport implements Transport {
   }
 
   async send(message: TransportMessage): Promise<void> {
-    const socket = this.sockets[message.participant];
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new Error(`Socket for ${message.participant} is not ready`);
+    if (message.participant === 'server') {
+      // Deliver to backend side by pushing onto the server queue directly.
+      console.log(`[ws-transport] server enqueued ${message.payload.length} bytes`);
+      this.queues.server.push(message.payload);
+      return;
     }
+
+    const socket = this.sockets.device;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      throw new Error('Socket for device is not ready');
+    }
+    console.log(`[ws-transport] sending ${message.payload.length} bytes to device over socket`);
     socket.send(message.payload);
   }
 
   async receive(participant: Participant): Promise<Uint8Array | null> {
     const queue = this.queues[participant];
     if (queue.length === 0) return null;
-    return queue.shift() ?? null;
+    const payload = queue.shift() ?? null;
+    if (payload) {
+      console.log(`[ws-transport] deliver ${payload.length} bytes to ${participant}`);
+    }
+    return payload;
   }
 }

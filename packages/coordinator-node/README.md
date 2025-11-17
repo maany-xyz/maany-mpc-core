@@ -65,6 +65,22 @@ an initial JSON payload:
 Once received, the server emits a `session:ready` event with the MPC transport,
 context, and intent metadata so the application can kick off DKG/signing logic.
 
+**Default example configuration (`examples/node-coordinator-server`):**
+
+- Endpoint: `ws://localhost:8080` (configurable via `PORT`). There is no path or
+  query string; all metadata is included in the handshake JSON.
+- Handshake payload: exactly the JSON above. The RN app must send it immediately
+  after the socket opens.
+- Lifecycle: one WebSocket per MPC operation (e.g., DKG, signing). After the
+  intent finishes, the server closes the session and the client should close as
+  well.
+- Messaging: after the handshake, all frames are raw MPC payloads exchanged as
+  binary WebSocket frames (`WebSocketTransport` handles them). No extra JSON
+  commands are currently defined.
+- Auth: the payload exposes a `token` field, but the example server does not yet
+  validate it—production deployments should verify JWT/API keys before running
+  DKG/sign.
+
 ### Production Integration (Next Steps)
 
 The package leaves the following pieces to the host application:
