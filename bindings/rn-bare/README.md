@@ -20,8 +20,8 @@ The package ships without `ios/dist` or `android/native-libs`. During `postinsta
 
 If you do not provide overrides, the script downloads from
 ```
-https://github.com/maany/maany-mpc-core/releases/download/v${version}/maany-mpc-ios-${version}.tar.gz
-https://github.com/maany/maany-mpc-core/releases/download/v${version}/maany-mpc-android-${version}.tar.gz
+https://github.com/maany-xyz/maany-mpc-core/releases/download/v${version}/maany-mpc-ios-${version}.tar.gz
+https://github.com/maany-xyz/maany-mpc-core/releases/download/v${version}/maany-mpc-android-${version}.tar.gz
 ```
 where `${version}` is the version from `package.json`.
 

@@ -17,7 +17,7 @@
     "react-native.config.js"
   ],
   "dependencies": {
-    "@maany/mpc-rn": "file:../../bindings/rn",
+    "@maany/mpc-rn-bare": "file:../../bindings/rn-bare",
     "@noble/hashes": "^1.4.0"
   },
   "devDependencies": {

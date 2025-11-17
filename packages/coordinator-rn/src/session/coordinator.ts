@@ -1,6 +1,6 @@
 import type { Transport } from '../transport';
 import type { ShareStorage } from '../storage';
-import * as mpc from '@maany/mpc-rn';
+import * as mpc from '@maany/mpc-rn-bare';
 import { runDkg } from './dkg';
 import { runSign, SignOptions } from './sign';
 import { optionalClone } from '../utils/bytes';

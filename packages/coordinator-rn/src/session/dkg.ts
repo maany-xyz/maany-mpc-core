@@ -1,6 +1,6 @@
 import type { Transport, Participant } from '../transport';
 import type { ShareStorage } from '../storage';
-import * as mpc from '@maany/mpc-rn';
+import * as mpc from '@maany/mpc-rn-bare';
 import { cloneBytes, optionalClone, toHex } from '../utils/bytes';
 
 export interface DkgResult {

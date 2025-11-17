@@ -19,7 +19,7 @@ if (!fs.existsSync(manifestPath)) {
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const baseUrl = process.env.MAANY_MPC_ARTIFACTS_BASE_URL
-  || `https://github.com/maany/maany-mpc-core/releases/download/v${packageJson.version}`;
+  || `https://github.com/maany-xyz/maany-mpc-core/releases/download/v${packageJson.version}`;
 const forceDownload = process.env.MAANY_MPC_FORCE_DOWNLOAD === '1';
 
 function expandTemplate(value) {
