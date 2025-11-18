@@ -60,12 +60,14 @@ export async function runDkg(ctx: mpc.Ctx, opts: DkgOptions): Promise<DkgResult>
       }
     }
   } else {
-    let inbound: Uint8Array | null = null;
+    let inbound: Uint8Array | null = await waitForMessage('device');
+    console.log('[maany-sdk] device-only dkg received first frame', inbound.length);
     for (let i = 0; i < 512; ++i) {
       const done = await step('device', dkgDevice, inbound);
       inbound = null;
       if (done) break;
       inbound = await waitForMessage('device');
+      console.log('[maany-sdk] device-only dkg received frame', inbound.length, 'round', i + 1);
     }
   }
 
