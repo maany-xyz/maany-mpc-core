@@ -1,5 +1,3 @@
-# Storage Logic for coordinator-node 
-
 1. Split what you need to store
 
 For a 2-of-2 Maany wallet you roughly have:
@@ -310,3 +308,19 @@ Hardware-level key protection
 Rotation / access control managed by the cloud / Vault
 
 Easier audits
+
+6. Why this fits Maany nicely
+
+You keep @maany/mpc-coordinator-node clean and reusable (anyone can implement their own storage adapter: “memory only”, “Dynamo only”, “Vault only”…).
+
+Your tiny Node coordinator service just wires in a PostgresRedisStorage + KeyEncryptor implementation.
+
+You can start with a simple local/dev config (Docker Postgres + Redis, env master key), and later, for Maany production, swap in:
+
+Managed Postgres (RDS / Cloud SQL)
+
+Managed Redis (Elasticache / Memorystore)
+
+KMS/Vault-backed encryption
+
+Optional: multi-region replication if you go global

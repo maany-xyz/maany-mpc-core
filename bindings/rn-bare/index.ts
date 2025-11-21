@@ -28,6 +28,28 @@ export interface Pubkey {
   compressed: Uint8Array;
 }
 
+export interface BackupCiphertext {
+  kind: 'device' | 'server';
+  curve: 'secp256k1' | 'ed25519';
+  scheme: 'ecdsa-2p' | 'ecdsa-tn' | 'schnorr-2p';
+  keyId: Uint8Array;
+  threshold: number;
+  shareCount: number;
+  label: Uint8Array;
+  blob: Uint8Array;
+}
+
+export interface BackupCreateOptions {
+  threshold?: number;
+  shareCount?: number;
+  label?: Uint8Array;
+}
+
+export interface BackupCreateResult {
+  ciphertext: BackupCiphertext;
+  shares: Uint8Array[];
+}
+
 interface NativeBinding {
   init(): Ctx;
   shutdown(ctx: Ctx): void;
@@ -45,6 +67,8 @@ interface NativeBinding {
   signFinalize(ctx: Ctx, sign: SignSession, format?: SignatureFormat): Uint8Array;
   signFree(sign: SignSession): void;
   refreshNew(ctx: Ctx, kp: Keypair, options?: { sessionId?: Uint8Array }): Dkg;
+  backupCreate(ctx: Ctx, kp: Keypair, options?: BackupCreateOptions): BackupCreateResult;
+  backupRestore(ctx: Ctx, ciphertext: BackupCiphertext, shares: Uint8Array[]): Keypair;
 }
 
 let cachedBinding: NativeBinding | null = null;
@@ -137,4 +161,12 @@ export function signFree(sign: SignSession): void {
 
 export function refreshNew(ctx: Ctx, kp: Keypair, options?: { sessionId?: Uint8Array }): Dkg {
   return ensureBinding().refreshNew(ctx, kp, options);
+}
+
+export function backupCreate(ctx: Ctx, kp: Keypair, options?: BackupCreateOptions): BackupCreateResult {
+  return ensureBinding().backupCreate(ctx, kp, options);
+}
+
+export function backupRestore(ctx: Ctx, ciphertext: BackupCiphertext, shares: Uint8Array[]): Keypair {
+  return ensureBinding().backupRestore(ctx, ciphertext, shares);
 }

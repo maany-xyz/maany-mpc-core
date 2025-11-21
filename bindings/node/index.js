@@ -27,5 +27,7 @@ module.exports = {
   signStep: binding.signStep,
   signFinalize: binding.signFinalize,
   signFree: binding.signFree,
-  refreshNew: binding.refreshNew
+  refreshNew: binding.refreshNew,
+  backupCreate: binding.backupCreate,
+  backupRestore: binding.backupRestore
 };

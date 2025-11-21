@@ -135,6 +135,21 @@ typedef struct {
   maany_mpc_key_id_t     key_id;     /* optional; 0ed if unknown */
 } maany_mpc_kp_meta_t;
 
+typedef struct {
+  maany_mpc_share_kind_t kind;
+  maany_mpc_curve_t      curve;
+  maany_mpc_scheme_t     scheme;
+  maany_mpc_key_id_t     key_id;
+  uint32_t               threshold;
+  uint32_t               share_count;
+  maany_mpc_buf_t        label;      /* optional AAD; lib-alloc */
+  maany_mpc_buf_t        ciphertext; /* AES-GCM nonce|tag|payload */
+} maany_mpc_backup_ciphertext_t;
+
+typedef struct {
+  maany_mpc_buf_t data; /* serialized (pid||share) buffer */
+} maany_mpc_backup_share_t;
+
 /* Serialize / deserialize local share (opaque bytes) */
 maany_mpc_error_t maany_mpc_kp_export(
   maany_mpc_ctx_t* ctx,
@@ -158,6 +173,22 @@ maany_mpc_error_t maany_mpc_kp_pubkey(
   maany_mpc_pubkey_t* out_pub /* pubkey.data allocated by lib */);
 
 void maany_mpc_buf_free(maany_mpc_ctx_t* ctx, maany_mpc_buf_t* buf);
+
+maany_mpc_error_t maany_mpc_backup_create(
+  maany_mpc_ctx_t* ctx,
+  const maany_mpc_keypair_t* kp,
+  uint32_t threshold,
+  size_t share_count,
+  const maany_mpc_buf_t* label,
+  maany_mpc_backup_ciphertext_t* out_ciphertext,
+  maany_mpc_backup_share_t* out_shares);
+
+maany_mpc_error_t maany_mpc_backup_restore(
+  maany_mpc_ctx_t* ctx,
+  const maany_mpc_backup_ciphertext_t* ciphertext,
+  const maany_mpc_backup_share_t* shares,
+  size_t share_count,
+  maany_mpc_keypair_t** out_kp);
 
 /*============================*
  *  DKG (2-of-2 example)

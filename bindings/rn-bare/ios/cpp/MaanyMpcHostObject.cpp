@@ -230,6 +230,78 @@ std::optional<Value> getOptionalProperty(Runtime& runtime, const Object& source,
   return value;
 }
 
+std::string requireString(Runtime& runtime, const Value& value, const char* label) {
+  if (!value.isString()) {
+    throwTypeError(runtime, std::string(label) + " must be a string");
+  }
+  auto str = value.getString(runtime);
+  return str.utf8(runtime);
+}
+
+String makeString(Runtime& runtime, const char* text) {
+  return String::createFromUtf8(runtime, text);
+}
+
+const char* shareKindToString(maany_mpc_share_kind_t kind) {
+  switch (kind) {
+    case MAANY_MPC_SHARE_DEVICE:
+      return "device";
+    case MAANY_MPC_SHARE_SERVER:
+      return "server";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_share_kind_t parseShareKind(Runtime& runtime, const Value& value) {
+  auto str = requireString(runtime, value, "kind");
+  if (str == "device") return MAANY_MPC_SHARE_DEVICE;
+  if (str == "server") return MAANY_MPC_SHARE_SERVER;
+  throwTypeError(runtime, "Unsupported share kind: " + str);
+  return MAANY_MPC_SHARE_DEVICE;
+}
+
+const char* curveToString(maany_mpc_curve_t curve) {
+  switch (curve) {
+    case MAANY_MPC_CURVE_SECP256K1:
+      return "secp256k1";
+    case MAANY_MPC_CURVE_ED25519:
+      return "ed25519";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_curve_t parseCurve(Runtime& runtime, const Value& value) {
+  auto str = requireString(runtime, value, "curve");
+  if (str == "secp256k1") return MAANY_MPC_CURVE_SECP256K1;
+  if (str == "ed25519") return MAANY_MPC_CURVE_ED25519;
+  throwTypeError(runtime, "Unsupported curve: " + str);
+  return MAANY_MPC_CURVE_SECP256K1;
+}
+
+const char* schemeToString(maany_mpc_scheme_t scheme) {
+  switch (scheme) {
+    case MAANY_MPC_SCHEME_ECDSA_2P:
+      return "ecdsa-2p";
+    case MAANY_MPC_SCHEME_ECDSA_TN:
+      return "ecdsa-tn";
+    case MAANY_MPC_SCHEME_SCHNORR_2P:
+      return "schnorr-2p";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_scheme_t parseScheme(Runtime& runtime, const Value& value) {
+  auto str = requireString(runtime, value, "scheme");
+  if (str == "ecdsa-2p") return MAANY_MPC_SCHEME_ECDSA_2P;
+  if (str == "ecdsa-tn") return MAANY_MPC_SCHEME_ECDSA_TN;
+  if (str == "schnorr-2p") return MAANY_MPC_SCHEME_SCHNORR_2P;
+  throwTypeError(runtime, "Unsupported scheme: " + str);
+  return MAANY_MPC_SCHEME_ECDSA_2P;
+}
+
 std::vector<uint8_t> toByteVector(Runtime& runtime, const Value& value, const char* label) {
   if (!value.isObject()) {
     throwTypeError(runtime, std::string(label) + " must be a Uint8Array or ArrayBuffer");
@@ -497,6 +569,173 @@ class MaanyMpcHostObject final : public HostObject {
             auto dkg = requireDkg(rt, args[0]);
             dkg->free();
             return Value::undefined();
+          });
+    }
+
+    if (name == "backupCreate") {
+      return Function::createFromHostFunction(
+          runtime, PropNameID::forAscii(runtime, "backupCreate"), 3,
+          [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+            if (count < 2) {
+              throwTypeError(rt, "backupCreate expects (ctx, keypair, [options])");
+            }
+            auto ctx = requireCtx(rt, args[0]);
+            auto kp = requireKeypair(rt, args[1]);
+
+            uint32_t threshold = 2;
+            size_t shareCount = 3;
+            std::vector<uint8_t> label;
+
+            if (count >= 3 && !args[2].isUndefined() && !args[2].isNull()) {
+              if (!args[2].isObject()) {
+                throwTypeError(rt, "options must be an object");
+              }
+              auto opts = args[2].getObject(rt);
+              if (auto thr = getOptionalProperty(rt, opts, "threshold")) {
+                if (!thr->isNumber()) throwTypeError(rt, "threshold must be a number");
+                threshold = static_cast<uint32_t>(thr->asNumber());
+              }
+              if (auto shareProp = getOptionalProperty(rt, opts, "shareCount")) {
+                if (!shareProp->isNumber()) throwTypeError(rt, "shareCount must be a number");
+                shareCount = static_cast<size_t>(shareProp->asNumber());
+              } else if (auto shares = getOptionalProperty(rt, opts, "shares")) {
+                if (!shares->isNumber()) throwTypeError(rt, "shares must be a number");
+                shareCount = static_cast<size_t>(shares->asNumber());
+              }
+              if (auto labelProp = getOptionalProperty(rt, opts, "label")) {
+                label = toByteVector(rt, *labelProp, "label");
+              }
+            }
+
+            if (shareCount < threshold) {
+              throwTypeError(rt, "shareCount must be >= threshold");
+            }
+
+            maany_mpc_buf_t labelBuf{nullptr, 0};
+            if (!label.empty()) {
+              labelBuf.data = label.data();
+              labelBuf.len = label.size();
+            }
+
+            maany_mpc_backup_ciphertext_t cipher{};
+            std::vector<maany_mpc_backup_share_t> shareStructs(shareCount);
+            maany_mpc_error_t status = maany_mpc_backup_create(
+              ctx->ptr(rt), kp->ptr(rt), threshold, shareCount,
+              label.empty() ? nullptr : &labelBuf, &cipher, shareStructs.data());
+            if (status != MAANY_MPC_OK) {
+              throwMaanyError(rt, "maany_mpc_backup_create", status);
+            }
+
+            auto cipherObj = Object(rt);
+            cipherObj.setProperty(rt, "kind", makeString(rt, shareKindToString(cipher.kind)));
+            cipherObj.setProperty(rt, "curve", makeString(rt, curveToString(cipher.curve)));
+            cipherObj.setProperty(rt, "scheme", makeString(rt, schemeToString(cipher.scheme)));
+            cipherObj.setProperty(rt, "threshold", Value(static_cast<double>(cipher.threshold)));
+            cipherObj.setProperty(rt, "shareCount", Value(static_cast<double>(cipher.share_count)));
+            cipherObj.setProperty(rt, "keyId", makeUint8Array(rt, std::vector<uint8_t>(cipher.key_id.bytes.begin(), cipher.key_id.bytes.end())));
+
+            std::vector<uint8_t> labelOut;
+            if (cipher.label.data && cipher.label.len) {
+              auto* ptr = static_cast<uint8_t*>(cipher.label.data);
+              labelOut.assign(ptr, ptr + cipher.label.len);
+            }
+            cipherObj.setProperty(rt, "label", makeUint8Array(rt, labelOut));
+
+            std::vector<uint8_t> blobOut;
+            if (cipher.ciphertext.data && cipher.ciphertext.len) {
+              auto* ptr = static_cast<uint8_t*>(cipher.ciphertext.data);
+              blobOut.assign(ptr, ptr + cipher.ciphertext.len);
+            }
+            cipherObj.setProperty(rt, "blob", makeUint8Array(rt, blobOut));
+
+            maany_mpc_buf_free(ctx->ptr(rt), &cipher.label);
+            maany_mpc_buf_free(ctx->ptr(rt), &cipher.ciphertext);
+
+            auto sharesArray = Array(rt, shareCount);
+            for (size_t i = 0; i < shareCount; ++i) {
+              std::vector<uint8_t> shareBytes;
+              if (shareStructs[i].data.data && shareStructs[i].data.len) {
+                auto* ptr = static_cast<uint8_t*>(shareStructs[i].data.data);
+                shareBytes.assign(ptr, ptr + shareStructs[i].data.len);
+              }
+              sharesArray.setValueAtIndex(rt, i, makeUint8Array(rt, shareBytes));
+              maany_mpc_buf_free(ctx->ptr(rt), &shareStructs[i].data);
+            }
+
+            auto result = Object(rt);
+            result.setProperty(rt, "ciphertext", cipherObj);
+            result.setProperty(rt, "shares", sharesArray);
+            return result;
+          });
+    }
+
+    if (name == "backupRestore") {
+      return Function::createFromHostFunction(
+          runtime, PropNameID::forAscii(runtime, "backupRestore"), 3,
+          [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+            if (count < 3) {
+              throwTypeError(rt, "backupRestore expects (ctx, ciphertext, shares)");
+            }
+            auto ctx = requireCtx(rt, args[0]);
+            if (!args[1].isObject()) {
+              throwTypeError(rt, "ciphertext must be an object");
+            }
+            auto cipherObj = args[1].getObject(rt);
+
+            maany_mpc_backup_ciphertext_t cipher{};
+            cipher.kind = parseShareKind(rt, cipherObj.getProperty(rt, "kind"));
+            cipher.curve = parseCurve(rt, cipherObj.getProperty(rt, "curve"));
+            cipher.scheme = parseScheme(rt, cipherObj.getProperty(rt, "scheme"));
+            cipher.threshold = static_cast<uint32_t>(cipherObj.getProperty(rt, "threshold").asNumber());
+            cipher.share_count = static_cast<uint32_t>(cipherObj.getProperty(rt, "shareCount").asNumber());
+
+            auto keyIdVec = toByteVector(rt, cipherObj.getProperty(rt, "keyId"), "keyId");
+            if (keyIdVec.size() != sizeof(cipher.key_id.bytes)) {
+              throwTypeError(rt, "keyId must be 32 bytes");
+            }
+            std::memcpy(cipher.key_id.bytes.data(), keyIdVec.data(), keyIdVec.size());
+
+            auto labelVec = toByteVector(rt, cipherObj.getProperty(rt, "label"), "label");
+            cipher.label.data = labelVec.data();
+            cipher.label.len = labelVec.size();
+
+            auto blobVec = toByteVector(rt, cipherObj.getProperty(rt, "blob"), "blob");
+            if (blobVec.empty()) {
+              throwTypeError(rt, "ciphertext blob must not be empty");
+            }
+            cipher.ciphertext.data = blobVec.data();
+            cipher.ciphertext.len = blobVec.size();
+
+            if (!args[2].isObject() || !args[2].getObject(rt).isArray(rt)) {
+              throwTypeError(rt, "shares must be an array");
+            }
+            auto sharesArray = args[2].getObject(rt).getArray(rt);
+            size_t shareCount = sharesArray.size(rt);
+            if (shareCount < cipher.threshold) {
+              throwTypeError(rt, "insufficient shares provided");
+            }
+
+            std::vector<std::vector<uint8_t>> shareStorage(shareCount);
+            std::vector<maany_mpc_backup_share_t> shareStructs(shareCount);
+            for (size_t i = 0; i < shareCount; ++i) {
+              auto shareValue = sharesArray.getValueAtIndex(rt, i);
+              shareStorage[i] = toByteVector(rt, shareValue, "share");
+              if (shareStorage[i].empty()) {
+                throwTypeError(rt, "share must not be empty");
+              }
+              shareStructs[i].data.data = shareStorage[i].data();
+              shareStructs[i].data.len = shareStorage[i].size();
+            }
+
+            maany_mpc_keypair_t* restored = nullptr;
+            maany_mpc_error_t status = maany_mpc_backup_restore(
+              ctx->ptr(rt), &cipher, shareStructs.data(), shareStructs.size(), &restored);
+            if (status != MAANY_MPC_OK) {
+              throwMaanyError(rt, "maany_mpc_backup_restore", status);
+            }
+
+            auto host = std::make_shared<KeypairHostObject>(restored);
+            return Object::createFromHostObject(rt, host);
           });
     }
 
@@ -801,9 +1040,9 @@ class MaanyMpcHostObject final : public HostObject {
 
   std::vector<PropNameID> getPropertyNames(Runtime& runtime) override {
     static const char* kProps[] = {
-        "init",        "shutdown",    "dkgNew",     "dkgStep",    "dkgFinalize", "dkgFree",
-        "kpExport",    "kpImport",    "kpPubkey",   "kpFree",     "signNew",     "signSetMessage",
-        "signStep",    "signFinalize", "signFree",   "refreshNew"};
+        "init",        "shutdown",    "dkgNew",        "dkgStep",      "dkgFinalize", "dkgFree",
+        "kpExport",    "kpImport",    "kpPubkey",      "kpFree",       "signNew",     "signSetMessage",
+        "signStep",    "signFinalize", "signFree",      "refreshNew",   "backupCreate", "backupRestore"};
     std::vector<PropNameID> names;
     names.reserve(sizeof(kProps) / sizeof(kProps[0]));
     for (const char* prop : kProps) {

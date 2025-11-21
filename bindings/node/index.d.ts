@@ -26,6 +26,28 @@ export interface Pubkey {
   compressed: Uint8Array;
 }
 
+export interface BackupCiphertext {
+  kind: 'device' | 'server';
+  curve: 'secp256k1' | 'ed25519';
+  scheme: 'ecdsa-2p' | 'ecdsa-tn' | 'schnorr-2p';
+  keyId: Uint8Array;
+  threshold: number;
+  shareCount: number;
+  label: Uint8Array;
+  blob: Uint8Array;
+}
+
+export interface BackupCreateOptions {
+  threshold?: number;
+  shareCount?: number;
+  label?: Uint8Array;
+}
+
+export interface BackupCreateResult {
+  ciphertext: BackupCiphertext;
+  shares: Uint8Array[];
+}
+
 export declare function init(): Ctx;
 export declare function shutdown(ctx: Ctx): void;
 export declare function dkgNew(ctx: Ctx, options: DkgOptions): Dkg;
@@ -42,3 +64,5 @@ export declare function signStep(ctx: Ctx, sign: SignSession, inPeerMsg?: Uint8A
 export declare function signFinalize(ctx: Ctx, sign: SignSession, format?: SignatureFormat): Uint8Array;
 export declare function signFree(sign: SignSession): void;
 export declare function refreshNew(ctx: Ctx, kp: Keypair, options?: { sessionId?: Uint8Array }): Dkg;
+export declare function backupCreate(ctx: Ctx, kp: Keypair, options?: BackupCreateOptions): BackupCreateResult;
+export declare function backupRestore(ctx: Ctx, ciphertext: BackupCiphertext, shares: Uint8Array[]): Keypair;

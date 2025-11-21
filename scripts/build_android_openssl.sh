@@ -21,7 +21,7 @@ case "${ABI}" in
 esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUTPUT_ROOT="${OUTPUT_ROOT:-${REPO_ROOT}/bindings/rn/android/third-party/openssl/${ABI}}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${REPO_ROOT}/bindings/rn-bare/android/third-party/openssl/${ABI}}"
 
 ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"
 if [[ -z "${ANDROID_NDK_ROOT}" ]]; then

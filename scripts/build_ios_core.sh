@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_ROOT="$ROOT_DIR/build/ios"
-DIST_DIR="$ROOT_DIR/bindings/rn/ios/dist"
+DIST_DIR="$ROOT_DIR/bindings/rn-bare/ios/dist"
 IOS_DEPLOYMENT_TARGET="13.0"
 OPENSSL_VERSION="3.5.501"
 OPENSSL_ARCHIVE="openssl.xcframework.zip"

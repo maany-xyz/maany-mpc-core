@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/dkg_roundtrip.dir/tests/cpp/dkg_roundtrip.cpp.o -o dkg_roundtrip  libmaany_mpc_core.a /Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/lib/Release/libcbmpc.a /opt/homebrew/lib/libcrypto.dylib

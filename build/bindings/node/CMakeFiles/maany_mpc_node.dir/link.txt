@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -undefined dynamic_lookup -dynamiclib -Wl,-headerpad_max_install_names -o maany_mpc_node.node -install_name @rpath/maany_mpc_node.node CMakeFiles/maany_mpc_node.dir/addon.cc.o  ../../libmaany_mpc_core.a /Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/lib/Release/libcbmpc.a /opt/homebrew/opt/openssl@3/lib/libcrypto.dylib

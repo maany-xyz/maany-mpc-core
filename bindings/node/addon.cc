@@ -193,6 +193,93 @@ maany_mpc_share_kind_t ParseRole(napi_env env, napi_value value) {
   return static_cast<maany_mpc_share_kind_t>(-1);
 }
 
+const char* ShareKindToString(maany_mpc_share_kind_t kind) {
+  switch (kind) {
+    case MAANY_MPC_SHARE_DEVICE:
+      return "device";
+    case MAANY_MPC_SHARE_SERVER:
+      return "server";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_share_kind_t ShareKindFromString(napi_env env, napi_value value) {
+  maany_mpc_share_kind_t kind = ParseRole(env, value);
+  return kind;
+}
+
+const char* CurveToString(maany_mpc_curve_t curve) {
+  switch (curve) {
+    case MAANY_MPC_CURVE_SECP256K1:
+      return "secp256k1";
+    case MAANY_MPC_CURVE_ED25519:
+      return "ed25519";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_curve_t CurveFromString(napi_env env, napi_value value) {
+  size_t length = 0;
+  napi_get_value_string_utf8(env, value, nullptr, 0, &length);
+  std::string curve(length, '\0');
+  napi_get_value_string_utf8(env, value, curve.data(), curve.size() + 1, &length);
+  curve.resize(length);
+  if (curve == "secp256k1") return MAANY_MPC_CURVE_SECP256K1;
+  if (curve == "ed25519") return MAANY_MPC_CURVE_ED25519;
+  napi_throw_range_error(env, nullptr, "unsupported curve value");
+  return static_cast<maany_mpc_curve_t>(-1);
+}
+
+const char* SchemeToString(maany_mpc_scheme_t scheme) {
+  switch (scheme) {
+    case MAANY_MPC_SCHEME_ECDSA_2P:
+      return "ecdsa-2p";
+    case MAANY_MPC_SCHEME_ECDSA_TN:
+      return "ecdsa-tn";
+    case MAANY_MPC_SCHEME_SCHNORR_2P:
+      return "schnorr-2p";
+    default:
+      return "unknown";
+  }
+}
+
+maany_mpc_scheme_t SchemeFromString(napi_env env, napi_value value) {
+  size_t length = 0;
+  napi_get_value_string_utf8(env, value, nullptr, 0, &length);
+  std::string scheme(length, '\0');
+  napi_get_value_string_utf8(env, value, scheme.data(), scheme.size() + 1, &length);
+  scheme.resize(length);
+  if (scheme == "ecdsa-2p") return MAANY_MPC_SCHEME_ECDSA_2P;
+  if (scheme == "ecdsa-tn") return MAANY_MPC_SCHEME_ECDSA_TN;
+  if (scheme == "schnorr-2p") return MAANY_MPC_SCHEME_SCHNORR_2P;
+  napi_throw_range_error(env, nullptr, "unsupported scheme value");
+  return static_cast<maany_mpc_scheme_t>(-1);
+}
+
+std::vector<uint8_t> BufferToVector(napi_env env, napi_value value, const char* label) {
+  bool is_buffer = false;
+  napi_is_buffer(env, value, &is_buffer);
+  if (!is_buffer) {
+    std::string message = std::string(label) + " must be a Buffer";
+    napi_throw_type_error(env, nullptr, message.c_str());
+    return {};
+  }
+  void* data = nullptr;
+  size_t length = 0;
+  napi_get_buffer_info(env, value, &data, &length);
+  std::vector<uint8_t> out(length);
+  if (length) std::memcpy(out.data(), data, length);
+  return out;
+}
+
+void SetBufferProp(napi_env env, napi_value obj, const char* name, const uint8_t* data, size_t len) {
+  napi_value buffer;
+  napi_create_buffer_copy(env, len, data, nullptr, &buffer);
+  napi_set_named_property(env, obj, name, buffer);
+}
+
 napi_value JsDkgNew(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value argv[2];
@@ -894,6 +981,287 @@ napi_value JsRefreshNew(napi_env env, napi_callback_info info) {
   return result;
 }
 
+napi_value JsBackupCreate(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  if (argc < 2) {
+    napi_throw_type_error(env, nullptr, "backupCreate expects (ctx, keypair, [options])");
+    return nullptr;
+  }
+
+  CtxHandle* ctx_handle = nullptr;
+  KeypairHandle* kp_handle = nullptr;
+  if (!UnwrapHandle(env, argv[0], &ctx_handle) || !UnwrapHandle(env, argv[1], &kp_handle)) return nullptr;
+  if (!ctx_handle->ctx || !kp_handle->kp) {
+    napi_throw_error(env, nullptr, "Context or keypair handle invalid");
+    return nullptr;
+  }
+
+  uint32_t threshold = 2;
+  size_t share_count = 3;
+  std::vector<uint8_t> label_vec;
+
+  if (argc >= 3 && argv[2] != nullptr) {
+    napi_valuetype type;
+    napi_typeof(env, argv[2], &type);
+    if (type != napi_undefined && type != napi_null) {
+      if (type != napi_object) {
+        napi_throw_type_error(env, nullptr, "options must be an object");
+        return nullptr;
+      }
+      napi_value opts = argv[2];
+
+      napi_value threshold_value;
+      if (napi_get_named_property(env, opts, "threshold", &threshold_value) == napi_ok) {
+        double temp = 0;
+        napi_get_value_double(env, threshold_value, &temp);
+        if (temp < 1) {
+          napi_throw_range_error(env, nullptr, "threshold must be >= 1");
+          return nullptr;
+        }
+        threshold = static_cast<uint32_t>(temp);
+      }
+
+      napi_value shares_value;
+      if (napi_get_named_property(env, opts, "shareCount", &shares_value) == napi_ok ||
+          napi_get_named_property(env, opts, "shares", &shares_value) == napi_ok) {
+        double temp = 0;
+        napi_get_value_double(env, shares_value, &temp);
+        if (temp < 1) {
+          napi_throw_range_error(env, nullptr, "shareCount must be >= 1");
+          return nullptr;
+        }
+        share_count = static_cast<size_t>(temp);
+      }
+
+      napi_value label_value;
+      if (napi_get_named_property(env, opts, "label", &label_value) == napi_ok) {
+        napi_valuetype label_type;
+        napi_typeof(env, label_value, &label_type);
+        if (label_type != napi_undefined && label_type != napi_null) {
+          label_vec = BufferToVector(env, label_value, "label");
+        }
+      }
+    }
+  }
+
+  if (share_count < threshold) {
+    napi_throw_range_error(env, nullptr, "shareCount must be >= threshold");
+    return nullptr;
+  }
+
+  maany_mpc_buf_t label_buf{nullptr, 0};
+  if (!label_vec.empty()) {
+    label_buf.data = label_vec.data();
+    label_buf.len = label_vec.size();
+  }
+
+  maany_mpc_backup_ciphertext_t cipher{};
+  std::vector<maany_mpc_backup_share_t> share_structs(share_count);
+  maany_mpc_error_t status = maany_mpc_backup_create(
+    ctx_handle->ctx,
+    kp_handle->kp,
+    threshold,
+    share_count,
+    label_vec.empty() ? nullptr : &label_buf,
+    &cipher,
+    share_structs.data());
+  if (status != MAANY_MPC_OK) {
+    napi_throw(env, CreateError(env, "maany_mpc_backup_create", status));
+    return nullptr;
+  }
+
+  napi_value ciphertext_obj;
+  napi_create_object(env, &ciphertext_obj);
+
+  napi_value kind_value;
+  napi_create_string_utf8(env, ShareKindToString(cipher.kind), NAPI_AUTO_LENGTH, &kind_value);
+  napi_set_named_property(env, ciphertext_obj, "kind", kind_value);
+
+  napi_value curve_value;
+  napi_create_string_utf8(env, CurveToString(cipher.curve), NAPI_AUTO_LENGTH, &curve_value);
+  napi_set_named_property(env, ciphertext_obj, "curve", curve_value);
+
+  napi_value scheme_value;
+  napi_create_string_utf8(env, SchemeToString(cipher.scheme), NAPI_AUTO_LENGTH, &scheme_value);
+  napi_set_named_property(env, ciphertext_obj, "scheme", scheme_value);
+
+  napi_value threshold_value;
+  napi_create_uint32(env, cipher.threshold, &threshold_value);
+  napi_set_named_property(env, ciphertext_obj, "threshold", threshold_value);
+
+  napi_value share_count_value;
+  napi_create_uint32(env, cipher.share_count, &share_count_value);
+  napi_set_named_property(env, ciphertext_obj, "shareCount", share_count_value);
+
+  SetBufferProp(env, ciphertext_obj, "keyId", cipher.key_id.bytes, sizeof(cipher.key_id.bytes));
+  if (cipher.label.data && cipher.label.len) {
+    SetBufferProp(env, ciphertext_obj, "label", static_cast<uint8_t*>(cipher.label.data), cipher.label.len);
+  } else {
+    napi_value empty;
+    napi_create_buffer(env, 0, nullptr, &empty);
+    napi_set_named_property(env, ciphertext_obj, "label", empty);
+  }
+  if (cipher.ciphertext.data && cipher.ciphertext.len) {
+    SetBufferProp(env, ciphertext_obj, "blob", static_cast<uint8_t*>(cipher.ciphertext.data), cipher.ciphertext.len);
+  } else {
+    napi_value empty;
+    napi_create_buffer(env, 0, nullptr, &empty);
+    napi_set_named_property(env, ciphertext_obj, "blob", empty);
+  }
+
+  maany_mpc_buf_free(ctx_handle->ctx, &cipher.label);
+  maany_mpc_buf_free(ctx_handle->ctx, &cipher.ciphertext);
+
+  napi_value shares_array;
+  napi_create_array_with_length(env, share_count, &shares_array);
+  for (size_t i = 0; i < share_count; ++i) {
+    napi_value share_buffer;
+    if (share_structs[i].data.data && share_structs[i].data.len) {
+      napi_create_buffer_copy(env, share_structs[i].data.len, share_structs[i].data.data, nullptr, &share_buffer);
+    } else {
+      napi_create_buffer(env, 0, nullptr, &share_buffer);
+    }
+    napi_set_element(env, shares_array, i, share_buffer);
+    maany_mpc_buf_free(ctx_handle->ctx, &share_structs[i].data);
+  }
+
+  napi_value result;
+  napi_create_object(env, &result);
+  napi_set_named_property(env, result, "ciphertext", ciphertext_obj);
+  napi_set_named_property(env, result, "shares", shares_array);
+  return result;
+}
+
+napi_value JsBackupRestore(napi_env env, napi_callback_info info) {
+  size_t argc = 3;
+  napi_value argv[3];
+  napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  if (argc < 3) {
+    napi_throw_type_error(env, nullptr, "backupRestore expects (ctx, ciphertext, shares)");
+    return nullptr;
+  }
+
+  CtxHandle* ctx_handle = nullptr;
+  if (!UnwrapHandle(env, argv[0], &ctx_handle)) return nullptr;
+  if (!ctx_handle->ctx) {
+    napi_throw_error(env, nullptr, "Context already shut down");
+    return nullptr;
+  }
+
+  napi_value cipher_obj = argv[1];
+  napi_valuetype cipher_type;
+  napi_typeof(env, cipher_obj, &cipher_type);
+  if (cipher_type != napi_object) {
+    napi_throw_type_error(env, nullptr, "ciphertext must be an object");
+    return nullptr;
+  }
+
+  maany_mpc_backup_ciphertext_t cipher{};
+
+  napi_value kind_value;
+  napi_get_named_property(env, cipher_obj, "kind", &kind_value);
+  cipher.kind = ShareKindFromString(env, kind_value);
+
+  napi_value curve_value;
+  napi_get_named_property(env, cipher_obj, "curve", &curve_value);
+  cipher.curve = CurveFromString(env, curve_value);
+
+  napi_value scheme_value;
+  napi_get_named_property(env, cipher_obj, "scheme", &scheme_value);
+  cipher.scheme = SchemeFromString(env, scheme_value);
+
+  napi_value threshold_value;
+  napi_get_named_property(env, cipher_obj, "threshold", &threshold_value);
+  napi_get_value_uint32(env, threshold_value, &cipher.threshold);
+
+  napi_value share_count_value;
+  napi_get_named_property(env, cipher_obj, "shareCount", &share_count_value);
+  napi_get_value_uint32(env, share_count_value, &cipher.share_count);
+
+  napi_value key_id_value;
+  napi_get_named_property(env, cipher_obj, "keyId", &key_id_value);
+  std::vector<uint8_t> key_id_vec = BufferToVector(env, key_id_value, "keyId");
+  if (key_id_vec.size() != sizeof(cipher.key_id.bytes)) {
+    napi_throw_range_error(env, nullptr, "keyId must be 32 bytes");
+    return nullptr;
+  }
+  std::memcpy(cipher.key_id.bytes, key_id_vec.data(), key_id_vec.size());
+
+  std::vector<uint8_t> label_vec;
+  napi_value label_value;
+  if (napi_get_named_property(env, cipher_obj, "label", &label_value) == napi_ok) {
+    napi_valuetype label_type;
+    napi_typeof(env, label_value, &label_type);
+    if (label_type != napi_undefined && label_type != napi_null) {
+      label_vec = BufferToVector(env, label_value, "label");
+    }
+  }
+  if (!label_vec.empty()) {
+    cipher.label.data = label_vec.data();
+    cipher.label.len = label_vec.size();
+  }
+
+  napi_value blob_value;
+  napi_get_named_property(env, cipher_obj, "blob", &blob_value);
+  std::vector<uint8_t> blob_vec = BufferToVector(env, blob_value, "blob");
+  if (blob_vec.empty()) {
+    napi_throw_range_error(env, nullptr, "ciphertext blob must not be empty");
+    return nullptr;
+  }
+  cipher.ciphertext.data = blob_vec.data();
+  cipher.ciphertext.len = blob_vec.size();
+
+  bool is_array = false;
+  napi_is_array(env, argv[2], &is_array);
+  if (!is_array) {
+    napi_throw_type_error(env, nullptr, "shares must be an array");
+    return nullptr;
+  }
+  uint32_t share_len = 0;
+  napi_get_array_length(env, argv[2], &share_len);
+  if (share_len < cipher.threshold) {
+    napi_throw_range_error(env, nullptr, "insufficient shares provided");
+    return nullptr;
+  }
+
+  std::vector<std::vector<uint8_t>> share_storage(share_len);
+  std::vector<maany_mpc_backup_share_t> share_structs(share_len);
+  for (uint32_t i = 0; i < share_len; ++i) {
+    napi_value share_value;
+    napi_get_element(env, argv[2], i, &share_value);
+    share_storage[i] = BufferToVector(env, share_value, "share");
+    if (share_storage[i].empty()) {
+      napi_throw_range_error(env, nullptr, "share must not be empty");
+      return nullptr;
+    }
+    share_structs[i].data.data = share_storage[i].data();
+    share_structs[i].data.len = share_storage[i].size();
+  }
+
+  maany_mpc_keypair_t* restored = nullptr;
+  maany_mpc_error_t status = maany_mpc_backup_restore(
+    ctx_handle->ctx,
+    &cipher,
+    share_structs.data(),
+    share_structs.size(),
+    &restored);
+  if (status != MAANY_MPC_OK) {
+    napi_throw(env, CreateError(env, "maany_mpc_backup_restore", status));
+    return nullptr;
+  }
+
+  auto* handle = new KeypairHandle{restored};
+  napi_value result = WrapHandle(env, handle, FinalizeKeypair);
+  if (!result) {
+    FinalizeKeypair(env, handle, nullptr);
+    napi_throw_error(env, nullptr, "Failed to wrap restored keypair");
+    return nullptr;
+  }
+  return result;
+}
+
 napi_value JsKpExport(napi_env env, napi_callback_info info) {
   size_t argc = 2;
   napi_value argv[2];
@@ -1042,6 +1410,8 @@ napi_value InitModule(napi_env env, napi_value exports) {
       {"signFinalize", nullptr, JsSignFinalize, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"signFree", nullptr, JsSignFree, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"refreshNew", nullptr, JsRefreshNew, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"backupCreate", nullptr, JsBackupCreate, nullptr, nullptr, nullptr, napi_default, nullptr},
+      {"backupRestore", nullptr, JsBackupRestore, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
 
   napi_status status = napi_define_properties(env, exports, sizeof(descriptors) / sizeof(descriptors[0]), descriptors);

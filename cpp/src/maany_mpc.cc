@@ -55,6 +55,8 @@ using maany::bridge::StepState;
 using maany::bridge::Scheme;
 using maany::bridge::Curve;
 using maany::bridge::RefreshOptions;
+using maany::bridge::BackupCiphertext;
+using maany::bridge::BackupShare;
 
 void* DefaultMalloc(size_t n) {
   return std::malloc(n);
@@ -352,6 +354,106 @@ void maany_mpc_buf_free(maany_mpc_ctx_t* ctx, maany_mpc_buf_t* buf) {
   free_fn(buf->data);
   buf->data = nullptr;
   buf->len = 0;
+}
+
+maany_mpc_error_t maany_mpc_backup_create(
+  maany_mpc_ctx_t* ctx,
+  const maany_mpc_keypair_t* kp,
+  uint32_t threshold,
+  size_t share_count,
+  const maany_mpc_buf_t* label,
+  maany_mpc_backup_ciphertext_t* out_ciphertext,
+  maany_mpc_backup_share_t* out_shares) {
+  if (!ctx || !ctx->bridge || !kp || !kp->keypair || !out_ciphertext || !out_shares)
+    return MAANY_MPC_ERR_INVALID_ARG;
+
+  BufferOwner label_owner;
+  if (label && label->data && label->len) {
+    try {
+      label_owner.bytes = CopyInBuffer(label);
+    } catch (...) {
+      return MAANY_MPC_ERR_INVALID_ARG;
+    }
+  }
+
+  try {
+    BackupCiphertext artifact;
+    std::vector<BackupShare> shares;
+    ctx->bridge->CreateBackup(*kp->keypair, threshold, share_count, label_owner, artifact, shares);
+
+    out_ciphertext->kind = static_cast<maany_mpc_share_kind_t>(artifact.kind);
+    out_ciphertext->scheme = static_cast<maany_mpc_scheme_t>(artifact.scheme);
+    out_ciphertext->curve = static_cast<maany_mpc_curve_t>(artifact.curve);
+    std::memcpy(out_ciphertext->key_id.bytes, artifact.key_id.bytes.data(), artifact.key_id.bytes.size());
+    out_ciphertext->threshold = artifact.threshold;
+    out_ciphertext->share_count = artifact.share_count;
+
+    maany_mpc_error_t status = CopyOutBuffer(ctx, artifact.label.bytes, &out_ciphertext->label);
+    if (status != MAANY_MPC_OK) return status;
+    status = CopyOutBuffer(ctx, artifact.payload.bytes, &out_ciphertext->ciphertext);
+    if (status != MAANY_MPC_OK) return status;
+
+    if (shares.size() != share_count)
+      return MAANY_MPC_ERR_GENERAL;
+
+    for (size_t i = 0; i < share_count; ++i) {
+      status = CopyOutBuffer(ctx, shares[i].data.bytes, &out_shares[i].data);
+      if (status != MAANY_MPC_OK) return status;
+    }
+
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
+}
+
+maany_mpc_error_t maany_mpc_backup_restore(
+  maany_mpc_ctx_t* ctx,
+  const maany_mpc_backup_ciphertext_t* ciphertext,
+  const maany_mpc_backup_share_t* shares,
+  size_t share_count,
+  maany_mpc_keypair_t** out_kp) {
+  if (!ctx || !ctx->bridge || !ciphertext || !shares || !out_kp)
+    return MAANY_MPC_ERR_INVALID_ARG;
+
+  BackupCiphertext artifact;
+  artifact.kind = static_cast<ShareKind>(ciphertext->kind);
+  artifact.scheme = static_cast<Scheme>(ciphertext->scheme);
+  artifact.curve = static_cast<Curve>(ciphertext->curve);
+  std::memcpy(artifact.key_id.bytes.data(), ciphertext->key_id.bytes, artifact.key_id.bytes.size());
+  artifact.threshold = ciphertext->threshold;
+  artifact.share_count = ciphertext->share_count;
+
+  try {
+    artifact.label.bytes = CopyInBuffer(&ciphertext->label);
+    artifact.payload.bytes = CopyInBuffer(&ciphertext->ciphertext);
+  } catch (...) {
+    return MAANY_MPC_ERR_INVALID_ARG;
+  }
+
+  std::vector<BackupShare> share_vec;
+  share_vec.resize(share_count);
+  try {
+    for (size_t i = 0; i < share_count; ++i) {
+      share_vec[i].data.bytes = CopyInBuffer(&shares[i].data);
+    }
+  } catch (...) {
+    return MAANY_MPC_ERR_INVALID_ARG;
+  }
+
+  try {
+    auto restored = ctx->bridge->RestoreBackup(artifact, share_vec);
+
+    void* raw = ctx->malloc_fn(sizeof(maany_mpc_kp_s));
+    if (!raw) return MAANY_MPC_ERR_MEMORY;
+    auto* handle = new (raw) maany_mpc_kp_s();
+    handle->owner = ctx;
+    handle->keypair = std::move(restored);
+    *out_kp = handle;
+    return MAANY_MPC_OK;
+  } catch (...) {
+    return TranslateException();
+  }
 }
 
 maany_mpc_error_t maany_mpc_dkg_new(

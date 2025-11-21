@@ -5,7 +5,11 @@
 #include <cbmpc/crypto/base.h>
 #include <cbmpc/crypto/base_ecc.h>
 #include <cbmpc/crypto/base_pki.h>
+#include <cbmpc/crypto/lagrange.h>
+#include <cbmpc/crypto/secret_sharing.h>
 #include <cbmpc/protocol/ecdsa_2p.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 
 #include <cstdint>
 #include <condition_variable>
@@ -18,6 +22,7 @@
 #include <sstream>
 #include <thread>
 #include <utility>
+#include <limits>
 
 namespace maany::bridge {
 
@@ -40,6 +45,9 @@ using coinbase::mpc::party_t;
 
 constexpr uint32_t kKeyBlobMagic = 0x4D50434B;  // 'MPCK'
 constexpr uint32_t kKeyBlobVersion = 1;
+constexpr size_t kBackupNonceSize = 12;
+constexpr size_t kBackupTagSize = 16;
+constexpr uint8_t kBackupShareVersion = 1;
 
 const mpc_pid_t& DevicePid() {
   static const mpc_pid_t pid = pid_from_name("maany-device");
@@ -141,6 +149,124 @@ BufferOwner MakeBuffer(std::vector<uint8_t> bytes) {
   BufferOwner buf;
   buf.bytes = std::move(bytes);
   return buf;
+}
+
+void Ensure(bool condition, ErrorCode code, const char* message) {
+  if (!condition) throw Error(code, message);
+}
+
+BufferOwner EncodeShare(const bn_t& pid, const bn_t& value, size_t scalar_size) {
+  auto pid_bin = pid.to_bin(static_cast<int>(scalar_size));
+  auto value_bin = value.to_bin(static_cast<int>(scalar_size));
+  BufferOwner out;
+  out.bytes.resize(1 + scalar_size * 2);
+  out.bytes[0] = kBackupShareVersion;
+  std::memcpy(out.bytes.data() + 1, pid_bin.data(), scalar_size);
+  std::memcpy(out.bytes.data() + 1 + scalar_size, value_bin.data(), scalar_size);
+  return out;
+}
+
+void DecodeShare(const BufferOwner& data, size_t scalar_size, bn_t& pid_out, bn_t& value_out) {
+  const size_t expected = 1 + scalar_size * 2;
+  if (data.bytes.size() != expected)
+    throw Error(ErrorCode::InvalidArgument, "invalid backup share length");
+  if (data.bytes[0] != kBackupShareVersion)
+    throw Error(ErrorCode::InvalidArgument, "unsupported backup share version");
+  coinbase::mem_t pid_mem(data.bytes.data() + 1, static_cast<int>(scalar_size));
+  coinbase::mem_t value_mem(data.bytes.data() + 1 + scalar_size, static_cast<int>(scalar_size));
+  pid_out = bn_t::from_bin(pid_mem);
+  value_out = bn_t::from_bin(value_mem);
+}
+
+BufferOwner AesGcmEncrypt(
+  const std::vector<uint8_t>& key,
+  const std::vector<uint8_t>& nonce,
+  const BufferOwner& aad,
+  const std::vector<uint8_t>& plaintext) {
+  Ensure(key.size() == 32, ErrorCode::InvalidArgument, "backup key must be 32 bytes");
+  Ensure(nonce.size() == kBackupNonceSize, ErrorCode::InvalidArgument, "backup nonce size invalid");
+  BufferOwner result;
+  std::vector<uint8_t> ciphertext(plaintext.size());
+  std::array<uint8_t, kBackupTagSize> tag{};
+
+  EVP_CIPHER_CTX* raw_ctx = EVP_CIPHER_CTX_new();
+  if (!raw_ctx) throw Error(ErrorCode::Memory, "failed to allocate cipher ctx");
+  auto ctx = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>(raw_ctx, &EVP_CIPHER_CTX_free);
+
+  if (EVP_EncryptInit_ex(raw_ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm init failed");
+  if (EVP_CIPHER_CTX_ctrl(raw_ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(nonce.size()), nullptr) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm iv len failed");
+  if (EVP_EncryptInit_ex(raw_ctx, nullptr, nullptr, key.data(), nonce.data()) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm key set failed");
+
+  int out_len = 0;
+  if (!aad.bytes.empty()) {
+    if (EVP_EncryptUpdate(raw_ctx, nullptr, &out_len, aad.bytes.data(), static_cast<int>(aad.bytes.size())) != 1)
+      throw Error(ErrorCode::Crypto, "aes gcm aad failed");
+  }
+
+  if (!plaintext.empty()) {
+    if (EVP_EncryptUpdate(raw_ctx, ciphertext.data(), &out_len, plaintext.data(), static_cast<int>(plaintext.size())) != 1)
+      throw Error(ErrorCode::Crypto, "aes gcm encrypt failed");
+  }
+
+  int final_len = 0;
+  if (EVP_EncryptFinal_ex(raw_ctx, ciphertext.data() + out_len, &final_len) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm final failed");
+
+  if (EVP_CIPHER_CTX_ctrl(raw_ctx, EVP_CTRL_GCM_GET_TAG, kBackupTagSize, tag.data()) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm tag failed");
+
+  result.bytes.reserve(nonce.size() + tag.size() + ciphertext.size());
+  result.bytes.insert(result.bytes.end(), nonce.begin(), nonce.end());
+  result.bytes.insert(result.bytes.end(), tag.begin(), tag.end());
+  result.bytes.insert(result.bytes.end(), ciphertext.begin(), ciphertext.end());
+  return result;
+}
+
+std::vector<uint8_t> AesGcmDecrypt(
+  const std::vector<uint8_t>& key,
+  const BufferOwner& aad,
+  const uint8_t* nonce,
+  size_t nonce_len,
+  const uint8_t* tag,
+  size_t tag_len,
+  const uint8_t* ciphertext,
+  size_t ciphertext_len) {
+  Ensure(key.size() == 32, ErrorCode::InvalidArgument, "backup key must be 32 bytes");
+  std::vector<uint8_t> plaintext(ciphertext_len);
+  EVP_CIPHER_CTX* raw_ctx = EVP_CIPHER_CTX_new();
+  if (!raw_ctx) throw Error(ErrorCode::Memory, "failed to allocate cipher ctx");
+  auto ctx = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>(raw_ctx, &EVP_CIPHER_CTX_free);
+
+  if (EVP_DecryptInit_ex(raw_ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm decrypt init failed");
+  if (EVP_CIPHER_CTX_ctrl(raw_ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(nonce_len), nullptr) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm iv len failed");
+  if (EVP_DecryptInit_ex(raw_ctx, nullptr, nullptr, key.data(), nonce) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm key set failed");
+
+  int out_len = 0;
+  if (!aad.bytes.empty()) {
+    if (EVP_DecryptUpdate(raw_ctx, nullptr, &out_len, aad.bytes.data(), static_cast<int>(aad.bytes.size())) != 1)
+      throw Error(ErrorCode::Crypto, "aes gcm aad failed");
+  }
+
+  if (ciphertext_len > 0) {
+    if (EVP_DecryptUpdate(raw_ctx, plaintext.data(), &out_len, ciphertext, static_cast<int>(ciphertext_len)) != 1)
+      throw Error(ErrorCode::Crypto, "aes gcm decrypt failed");
+  }
+
+  if (EVP_CIPHER_CTX_ctrl(raw_ctx, EVP_CTRL_GCM_SET_TAG, static_cast<int>(tag_len), const_cast<uint8_t*>(tag)) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm tag set failed");
+
+  int final_len = 0;
+  if (EVP_DecryptFinal_ex(raw_ctx, plaintext.data() + out_len, &final_len) != 1)
+    throw Error(ErrorCode::Crypto, "aes gcm final failed");
+
+  plaintext.resize(static_cast<size_t>(out_len + final_len));
+  return plaintext;
 }
 
 class AsyncSession {
@@ -644,9 +770,144 @@ class ContextImpl final : public Context {
     return std::make_unique<RefreshSessionImpl>(kp, opts);
   }
 
+  void CreateBackup(
+    const Keypair& kp_base,
+    uint32_t threshold,
+    size_t share_count,
+    const BufferOwner& label,
+    BackupCiphertext& out_ciphertext,
+    std::vector<BackupShare>& out_shares) override;
+
+  std::unique_ptr<Keypair> RestoreBackup(
+    const BackupCiphertext& ciphertext,
+    const std::vector<BackupShare>& shares) override;
+
  private:
+  std::vector<uint8_t> RandomBytes(size_t len) const;
   InitOptions opts_;
 };
+
+std::vector<uint8_t> ContextImpl::RandomBytes(size_t len) const {
+  std::vector<uint8_t> out(len);
+  if (len == 0) return out;
+  if (opts_.rng) {
+    if (opts_.rng(out.data(), len) != 0)
+      throw Error(ErrorCode::Rng, "rng callback failed");
+  } else {
+    if (len > static_cast<size_t>(std::numeric_limits<int>::max()))
+      throw Error(ErrorCode::InvalidArgument, "random length too large");
+    if (RAND_bytes(out.data(), static_cast<int>(len)) != 1)
+      throw Error(ErrorCode::Rng, "RAND_bytes failed");
+  }
+  return out;
+}
+
+void ContextImpl::CreateBackup(
+  const Keypair& kp_base,
+  uint32_t threshold,
+  size_t share_count,
+  const BufferOwner& label,
+  BackupCiphertext& out_ciphertext,
+  std::vector<BackupShare>& out_shares) {
+  auto& kp = dynamic_cast<const KeypairImpl&>(kp_base);
+  if (threshold < 1) throw Error(ErrorCode::InvalidArgument, "threshold must be >= 1");
+  if (share_count < threshold) throw Error(ErrorCode::InvalidArgument, "share_count must be >= threshold");
+  if (share_count == 0) throw Error(ErrorCode::InvalidArgument, "share_count must be > 0");
+
+  auto blob = ExportKey(kp);
+  const ecurve_t curve = curve_secp256k1;
+  const auto& q = curve.order();
+  const size_t scalar_size = static_cast<size_t>(curve.size());
+
+  auto seed = RandomBytes(32);
+  coinbase::crypto::drbg_aes_ctr_t drbg(mem_t(seed.data(), static_cast<int>(seed.size())));
+  bn_t secret = drbg.gen_bn(q);
+  auto key_bin = secret.to_bin(static_cast<int>(scalar_size));
+  std::vector<uint8_t> key_bytes(key_bin.data(), key_bin.data() + key_bin.size());
+  auto nonce = RandomBytes(kBackupNonceSize);
+
+  out_ciphertext.payload = AesGcmEncrypt(key_bytes, nonce, label, blob.bytes);
+  out_ciphertext.kind = kp.kind();
+  out_ciphertext.scheme = kp.scheme();
+  out_ciphertext.curve = kp.curve();
+  out_ciphertext.key_id = kp.key_id();
+  out_ciphertext.threshold = threshold;
+  out_ciphertext.share_count = static_cast<uint32_t>(share_count);
+  out_ciphertext.label = label;
+
+  out_shares.clear();
+  out_shares.resize(share_count);
+  std::vector<bn_t> pids(share_count);
+  for (size_t i = 0; i < share_count; ++i) {
+    pids[i] = static_cast<int>(i + 1);
+  }
+
+  auto share_pair = coinbase::crypto::ss::share_threshold(
+    q,
+    secret,
+    static_cast<int>(threshold),
+    static_cast<int>(share_count),
+    pids,
+    &drbg);
+  const auto& share_values = share_pair.first;
+  for (size_t i = 0; i < share_count; ++i) {
+    out_shares[i].data = EncodeShare(pids[i], share_values[i], scalar_size);
+  }
+
+  std::fill(key_bytes.begin(), key_bytes.end(), 0);
+}
+
+std::unique_ptr<Keypair> ContextImpl::RestoreBackup(
+  const BackupCiphertext& ciphertext,
+  const std::vector<BackupShare>& shares) {
+  if (ciphertext.threshold < 1)
+    throw Error(ErrorCode::InvalidArgument, "invalid backup threshold");
+  if (shares.size() < ciphertext.threshold)
+    throw Error(ErrorCode::InvalidArgument, "insufficient backup shares provided");
+
+  const ecurve_t curve = curve_secp256k1;
+  const auto& q = curve.order();
+  const size_t scalar_size = static_cast<size_t>(curve.size());
+
+  std::vector<bn_t> pid_list;
+  std::vector<bn_t> share_values;
+  pid_list.reserve(shares.size());
+  share_values.reserve(shares.size());
+  for (const auto& share : shares) {
+    bn_t pid;
+    bn_t value;
+    DecodeShare(share.data, scalar_size, pid, value);
+    pid_list.push_back(pid);
+    share_values.push_back(value);
+  }
+
+  bn_t secret = coinbase::crypto::lagrange_interpolate(bn_t(0), share_values, pid_list, q);
+  auto key_bin = secret.to_bin(static_cast<int>(scalar_size));
+  std::vector<uint8_t> key_bytes(key_bin.data(), key_bin.data() + key_bin.size());
+
+  if (ciphertext.payload.bytes.size() < kBackupNonceSize + kBackupTagSize)
+    throw Error(ErrorCode::InvalidArgument, "backup ciphertext too short");
+  const uint8_t* nonce = ciphertext.payload.bytes.data();
+  const uint8_t* tag = ciphertext.payload.bytes.data() + kBackupNonceSize;
+  const uint8_t* cipher_data = ciphertext.payload.bytes.data() + kBackupNonceSize + kBackupTagSize;
+  const size_t cipher_len = ciphertext.payload.bytes.size() - kBackupNonceSize - kBackupTagSize;
+
+  auto plaintext = AesGcmDecrypt(
+    key_bytes,
+    ciphertext.label,
+    nonce,
+    kBackupNonceSize,
+    tag,
+    kBackupTagSize,
+    cipher_data,
+    cipher_len);
+
+  BufferOwner blob;
+  blob.bytes = std::move(plaintext);
+  auto restored = ImportKey(blob);
+  std::fill(key_bytes.begin(), key_bytes.end(), 0);
+  return restored;
+}
 
 }  // namespace
 

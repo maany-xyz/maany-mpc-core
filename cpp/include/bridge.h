@@ -109,6 +109,21 @@ struct StepOutput {
   std::optional<BufferOwner> outbound;
 };
 
+struct BackupCiphertext {
+  ShareKind kind{ShareKind::Device};
+  Scheme scheme{Scheme::Ecdsa2p};
+  Curve curve{Curve::Secp256k1};
+  KeyId key_id{};
+  uint32_t threshold{0};
+  uint32_t share_count{0};
+  BufferOwner label;
+  BufferOwner payload;  // nonce || tag || ciphertext
+};
+
+struct BackupShare {
+  BufferOwner data;  // encoded pid||share
+};
+
 class Keypair;
 class DkgSession;
 class SignSession;
@@ -124,6 +139,16 @@ class Context {
   virtual PubKey GetPubKey(const Keypair& kp) = 0;
   virtual std::unique_ptr<SignSession> CreateSign(const Keypair& kp, const SignOptions& opts) = 0;
   virtual std::unique_ptr<DkgSession> CreateRefresh(const Keypair& kp, const RefreshOptions& opts) = 0;
+  virtual void CreateBackup(
+    const Keypair& kp,
+    uint32_t threshold,
+    size_t share_count,
+    const BufferOwner& label,
+    BackupCiphertext& out_ciphertext,
+    std::vector<BackupShare>& out_shares) = 0;
+  virtual std::unique_ptr<Keypair> RestoreBackup(
+    const BackupCiphertext& ciphertext,
+    const std::vector<BackupShare>& shares) = 0;
 };
 
 class Keypair {
