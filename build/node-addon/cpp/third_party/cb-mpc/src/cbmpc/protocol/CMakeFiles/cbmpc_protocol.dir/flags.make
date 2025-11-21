@@ -6,9 +6,7 @@ CXX_DEFINES = -DNDEBUG
 
 CXX_INCLUDES = -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src -isystem /opt/homebrew/include
 
-CXX_FLAGSarm64 =  -O3 -std=c++17 -fPIC -fvisibility=hidden -fno-operator-names -Wno-attributes -Wno-null-dereference -Wno-parentheses -Wno-reorder -Wno-missing-braces -Wno-switch -Wno-switch-enum -Wno-sign-compare -Wno-strict-overflow -Wno-unused -Wno-parentheses -Werror -Wno-shorten-64-to-32 -DNO_DEPRECATED_OPENSSL -Wno-tautological-undefined-compare -Wno-\#pragma-messages -Wno-vla-extension -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC
-
-CXX_FLAGS =  -O3 -std=c++17 -fPIC -fvisibility=hidden -fno-operator-names -Wno-attributes -Wno-null-dereference -Wno-parentheses -Wno-reorder -Wno-missing-braces -Wno-switch -Wno-switch-enum -Wno-sign-compare -Wno-strict-overflow -Wno-unused -Wno-parentheses -Werror -Wno-shorten-64-to-32 -DNO_DEPRECATED_OPENSSL -Wno-tautological-undefined-compare -Wno-\#pragma-messages -Wno-vla-extension -O3 -DNDEBUG -std=gnu++17 -arch arm64 -fPIC
+CXX_FLAGS =  -O3 -std=c++17 -fPIC -fvisibility=hidden -fno-operator-names -Wno-attributes -Wno-null-dereference -Wno-parentheses -Wno-reorder -Wno-missing-braces -Wno-switch -Wno-switch-enum -Wno-sign-compare -Wno-strict-overflow -Wno-unused -Wno-parentheses -Werror -Wno-shorten-64-to-32 -DNO_DEPRECATED_OPENSSL -Wno-tautological-undefined-compare -Wno-\#pragma-messages -Wno-vla-extension -O3 -DNDEBUG -std=gnu++17 -fPIC
 
 # PCH options: cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/cmake_pch.hxx.pch_OPTIONS = -Winvalid-pch;-Xclang;-emit-pch;-Xclang;-include;-Xclang;/Users/markokuncic/Desktop/Tools/maany-mpc-core/build/node-addon/cpp/third_party/cb-mpc/src/cbmpc/protocol/CMakeFiles/cbmpc_protocol.dir/cmake_pch.hxx;-x;c++-header
 

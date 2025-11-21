@@ -6,7 +6,5 @@ CXX_DEFINES = -DNAPI_VERSION=8 -Dmaany_mpc_node_EXPORTS
 
 CXX_INCLUDES = -I/Users/markokuncic/.nvm/versions/node/v24.9.0/include/node -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/include
 
-CXX_FLAGSarm64 = -O3 -DNDEBUG -std=gnu++20 -arch arm64 -fPIC
-
-CXX_FLAGS = -O3 -DNDEBUG -std=gnu++20 -arch arm64 -fPIC
+CXX_FLAGS = -O3 -DNDEBUG -std=gnu++20 -fPIC
 

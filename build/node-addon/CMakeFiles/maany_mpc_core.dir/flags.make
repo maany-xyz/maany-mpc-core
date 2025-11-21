@@ -6,7 +6,5 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/include -I/Users/markokuncic/Desktop/Tools/maany-mpc-core/cpp/third_party/cb-mpc/src -isystem /opt/homebrew/include
 
-CXX_FLAGSarm64 = -O3 -DNDEBUG -std=gnu++20 -arch arm64 -fPIC
-
-CXX_FLAGS = -O3 -DNDEBUG -std=gnu++20 -arch arm64 -fPIC
+CXX_FLAGS = -O3 -DNDEBUG -std=gnu++20 -fPIC
 

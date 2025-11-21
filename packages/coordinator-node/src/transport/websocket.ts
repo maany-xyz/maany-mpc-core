@@ -40,19 +40,19 @@ export class WebSocketTransport implements Transport {
   }
 
   async send(message: TransportMessage): Promise<void> {
-    if (message.participant === 'server') {
-      // Deliver to backend side by pushing onto the server queue directly.
-      console.log(`[ws-transport] server enqueued ${message.payload.length} bytes`);
-      this.queues.server.push(message.payload);
+    const socket = this.sockets[message.participant];
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      console.log(
+        `[ws-transport] sending ${message.payload.length} bytes to ${message.participant} over socket`
+      );
+      socket.send(message.payload);
       return;
     }
 
-    const socket = this.sockets.device;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      throw new Error('Socket for device is not ready');
-    }
-    console.log(`[ws-transport] sending ${message.payload.length} bytes to device over socket`);
-    socket.send(message.payload);
+    console.log(
+      `[ws-transport] enqueued ${message.payload.length} bytes for ${message.participant} (no socket)`
+    );
+    this.queues[message.participant].push(message.payload);
   }
 
   async receive(participant: Participant): Promise<Uint8Array | null> {
