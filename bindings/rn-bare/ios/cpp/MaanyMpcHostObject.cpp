@@ -632,7 +632,14 @@ class MaanyMpcHostObject final : public HostObject {
             cipherObj.setProperty(rt, "scheme", makeString(rt, schemeToString(cipher.scheme)));
             cipherObj.setProperty(rt, "threshold", Value(static_cast<double>(cipher.threshold)));
             cipherObj.setProperty(rt, "shareCount", Value(static_cast<double>(cipher.share_count)));
-            cipherObj.setProperty(rt, "keyId", makeUint8Array(rt, std::vector<uint8_t>(cipher.key_id.bytes.begin(), cipher.key_id.bytes.end())));
+            cipherObj.setProperty(
+                rt,
+                "keyId",
+                makeUint8Array(
+                    rt,
+                    std::vector<uint8_t>(
+                        cipher.key_id.bytes,
+                        cipher.key_id.bytes + sizeof(cipher.key_id.bytes))));
 
             std::vector<uint8_t> labelOut;
             if (cipher.label.data && cipher.label.len) {
@@ -693,7 +700,7 @@ class MaanyMpcHostObject final : public HostObject {
             if (keyIdVec.size() != sizeof(cipher.key_id.bytes)) {
               throwTypeError(rt, "keyId must be 32 bytes");
             }
-            std::memcpy(cipher.key_id.bytes.data(), keyIdVec.data(), keyIdVec.size());
+            std::memcpy(cipher.key_id.bytes, keyIdVec.data(), keyIdVec.size());
 
             auto labelVec = toByteVector(rt, cipherObj.getProperty(rt, "label"), "label");
             cipher.label.data = labelVec.data();
