@@ -1,6 +1,7 @@
 const {
   CoordinatorServer,
   InMemoryShareStorage,
+  PlaintextKeyEncryptor,
   makeSignBytes,
   sha256,
 } = require('@maany/mpc-coordinator-node');
@@ -13,6 +14,7 @@ console.log(`Starting coordinator server on ws://localhost:${PORT}`);
 const server = new CoordinatorServer({
   port: PORT,
   storage: new InMemoryShareStorage(),
+  encryptor: new PlaintextKeyEncryptor(),
   onSessionReady: async (session) => {
     console.log(
       `Session ready: id=${session.sessionId} intent=${session.intent.kind} token=${session.token ?? 'n/a'}`
@@ -26,6 +28,7 @@ const server = new CoordinatorServer({
             sessionId: session.intent.sessionIdHint
               ? Buffer.from(session.intent.sessionIdHint, 'hex')
               : undefined,
+            metadata: session.intent.keyId ? { walletId: session.intent.keyId } : undefined,
           };
           console.log('runDkg opts:', {
             mode: dkgOpts.mode,
@@ -41,12 +44,15 @@ const server = new CoordinatorServer({
           if (!session.intent.keyId) {
             throw new Error('sign intent requires keyId');
           }
-          const serverRecord = await session.coordinator.options.storage.load(`${session.intent.keyId}:server`);
+          const serverRecord = await session.coordinator.options.storage.getWalletShare(session.intent.keyId);
           if (!serverRecord) {
             throw new Error(`Missing server share for keyId ${session.intent.keyId}`);
           }
           const ctx = session.ctx;
-          const serverKp = mpc.kpImport(ctx, serverRecord.blob);
+          const serverBlob = await session.coordinator.options.encryptor.decryptShare(
+            serverRecord.encryptedServerShare
+          );
+          const serverKp = mpc.kpImport(ctx, serverBlob);
           const digest = sha256(makeSignBytes({
             chainId: 'cosmoshub-4',
             accountNumber: '0',

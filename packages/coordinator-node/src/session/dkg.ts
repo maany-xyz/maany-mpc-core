@@ -1,5 +1,6 @@
 import type { Transport, Participant } from '../transport';
-import type { ShareStorage } from '../storage';
+import type { CoordinatorStorage, WalletShareUpsert } from '../storage';
+import type { KeyEncryptor } from '../crypto/key-encryptor';
 import * as mpc from '@maany/mpc-node';
 
 export interface DkgResult {
@@ -9,10 +10,17 @@ export interface DkgResult {
 
 export interface DkgOptions {
   transport: Transport;
-  storage: ShareStorage;
+  storage: CoordinatorStorage;
+  encryptor: KeyEncryptor;
   keyId?: Uint8Array | Buffer;
   sessionId?: Uint8Array | Buffer;
   mode?: 'dual' | 'server-only';
+  metadata?: {
+    walletId?: string;
+    appId?: string;
+    userId?: string;
+    deviceId?: string;
+  };
 }
 
 export async function runDkg(ctx: mpc.Ctx, opts: DkgOptions): Promise<DkgResult> {
@@ -92,10 +100,27 @@ export async function runDkg(ctx: mpc.Ctx, opts: DkgOptions): Promise<DkgResult>
   const serverKeypair = mpc.dkgFinalize(ctx, dkgServer);
 
   const serverBlob = mpc.kpExport(ctx, serverKeypair);
-  const keyId = normalizedKeyId
-    ? Buffer.from(normalizedKeyId).toString('hex')
-    : Buffer.from(serverBlob).toString('hex');
-  await opts.storage.save({ keyId: `${keyId}:server`, blob: serverBlob });
+  const walletId =
+    opts.metadata?.walletId ??
+    (normalizedKeyId ? Buffer.from(normalizedKeyId).toString('hex') : Buffer.from(serverBlob).toString('hex'));
+  const publicKey = Buffer.from(mpc.kpPubkey(ctx, serverKeypair).compressed).toString('hex');
+  const encryptedServerShare = await opts.encryptor.encryptShare(serverBlob);
+
+  const record: WalletShareUpsert = {
+    walletId,
+    appId: opts.metadata?.appId,
+    userId: opts.metadata?.userId,
+    deviceId: opts.metadata?.deviceId,
+    publicKey,
+    encryptedServerShare,
+  };
+
+  const existing = await opts.storage.getWalletShare(walletId);
+  if (existing) {
+    await opts.storage.updateWalletShare(record);
+  } else {
+    await opts.storage.saveWalletShare(record);
+  }
 
   return { deviceKeypair, serverKeypair };
 }

@@ -4,12 +4,14 @@ import type { Coordinator } from './session/coordinator';
 import { createCoordinator } from './session/coordinator';
 import { WebSocketTransport } from './transport/websocket';
 import type { Participant } from './transport';
-import type { ShareStorage } from './storage';
+import type { CoordinatorStorage } from './storage';
+import type { KeyEncryptor } from './crypto/key-encryptor';
 import * as mpc from '@maany/mpc-node';
 
 export interface CoordinatorServerOptions {
   port: number;
-  storage: ShareStorage;
+  storage: CoordinatorStorage;
+  encryptor: KeyEncryptor;
   onSessionReady?: (session: SessionReadyEvent) => void;
 }
 
@@ -57,12 +59,14 @@ export declare interface CoordinatorServer {
 
 export class CoordinatorServer extends EventEmitter {
   private readonly wss: WebSocketServer;
-  private readonly storage: ShareStorage;
+  private readonly storage: CoordinatorStorage;
+  private readonly encryptor: KeyEncryptor;
   private readonly sessions = new Map<string, SessionState>();
 
   constructor(options: CoordinatorServerOptions) {
     super();
     this.storage = options.storage;
+    this.encryptor = options.encryptor;
     this.wss = new WebSocketServer({ port: options.port });
     this.wss.on('connection', (socket) => this.handleConnection(socket));
     if (options.onSessionReady) {
@@ -100,6 +104,7 @@ export class CoordinatorServer extends EventEmitter {
       const coordinator = createCoordinator({
         transport: new WebSocketTransport(),
         storage: this.storage,
+        encryptor: this.encryptor,
       });
       state = {
         coordinator,
