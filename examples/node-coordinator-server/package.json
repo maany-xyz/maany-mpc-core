@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "@maany/mpc-coordinator-node": "file:../../packages/coordinator-node",
-    "@maany/mpc-node": "file:../../bindings/node"
+    "@maany/mpc-node": "file:../../bindings/node",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0"
   }
 }

@@ -1,6 +1,9 @@
+const { PrismaClient } = require('@maany/mpc-coordinator-node/node_modules/@prisma/client');
+const Redis = require('ioredis');
 const {
   CoordinatorServer,
-  InMemoryShareStorage,
+  PostgresRedisStorage,
+  createEnvKeyEncryptor,
   PlaintextKeyEncryptor,
   makeSignBytes,
   sha256,
@@ -11,10 +14,21 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 
 console.log(`Starting coordinator server on ws://localhost:${PORT}`);
 
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgresql://postgres:maany@localhost:5432/postgres?schema=public';
+process.env.DATABASE_URL = DATABASE_URL;
+
+const prisma = new PrismaClient();
+const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+
+const encryptor = process.env.MAANY_COORDINATOR_MASTER_KEY
+  ? createEnvKeyEncryptor()
+  : new PlaintextKeyEncryptor();
+
 const server = new CoordinatorServer({
   port: PORT,
-  storage: new InMemoryShareStorage(),
-  encryptor: new PlaintextKeyEncryptor(),
+  storage: new PostgresRedisStorage(prisma, redis),
+  encryptor,
   onSessionReady: async (session) => {
     console.log(
       `Session ready: id=${session.sessionId} intent=${session.intent.kind} token=${session.token ?? 'n/a'}`

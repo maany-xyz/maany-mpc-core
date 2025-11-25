@@ -16,4 +16,7 @@ packages/coordinator-rn/dist
 packages/coordinator-node/node_modules
 packages/coordinator-node/dist
 
+examples/node-coordinator-server/node_modules
+examples/node-coordinator-server/package-lock.json
+
 .openssl-build/
