@@ -5,6 +5,8 @@ import {
   SessionRecord,
   WalletShareRecord,
   WalletShareUpsert,
+  WalletBackupRecord,
+  WalletBackupUpsert,
 } from './types';
 
 const SESSION_PREFIX = 'session:';
@@ -44,6 +46,51 @@ function deserializeShare(row: {
     deviceId: row.deviceId ?? undefined,
     publicKey: row.publicKey ?? undefined,
     encryptedServerShare: row.encryptedServerShare.toString('base64'),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function serializeBackup(record: WalletBackupUpsert) {
+  return {
+    walletId: record.walletId,
+    ciphertextKind: record.ciphertextKind,
+    ciphertextCurve: record.ciphertextCurve,
+    ciphertextScheme: record.ciphertextScheme,
+    ciphertextKeyId: record.ciphertextKeyId,
+    ciphertextThreshold: record.ciphertextThreshold,
+    ciphertextShareCount: record.ciphertextShareCount,
+    ciphertextLabel: Buffer.from(record.ciphertextLabel, 'base64'),
+    ciphertextBlob: Buffer.from(record.ciphertextBlob, 'base64'),
+    coordinatorFragment: Buffer.from(record.encryptedCoordinatorFragment, 'base64'),
+  };
+}
+
+function deserializeBackup(row: {
+  walletId: string;
+  ciphertextKind: string;
+  ciphertextCurve: string;
+  ciphertextScheme: string;
+  ciphertextKeyId: string;
+  ciphertextThreshold: number;
+  ciphertextShareCount: number;
+  ciphertextLabel: Buffer;
+  ciphertextBlob: Buffer;
+  coordinatorFragment: Buffer;
+  createdAt: Date;
+  updatedAt: Date;
+}): WalletBackupRecord {
+  return {
+    walletId: row.walletId,
+    ciphertextKind: row.ciphertextKind,
+    ciphertextCurve: row.ciphertextCurve,
+    ciphertextScheme: row.ciphertextScheme,
+    ciphertextKeyId: row.ciphertextKeyId,
+    ciphertextThreshold: row.ciphertextThreshold,
+    ciphertextShareCount: row.ciphertextShareCount,
+    ciphertextLabel: row.ciphertextLabel.toString('base64'),
+    ciphertextBlob: row.ciphertextBlob.toString('base64'),
+    encryptedCoordinatorFragment: row.coordinatorFragment.toString('base64'),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -132,6 +179,21 @@ export class PostgresRedisStorage implements CoordinatorStorage {
       where: { walletId },
       create: { walletId, value },
       update: { value },
+    });
+  }
+
+  async getWalletBackup(walletId: string): Promise<WalletBackupRecord | null> {
+    const row = await this.prisma.walletBackup.findUnique({ where: { walletId } });
+    if (!row) return null;
+    return deserializeBackup(row);
+  }
+
+  async upsertWalletBackup(record: WalletBackupUpsert): Promise<void> {
+    const data = serializeBackup(record);
+    await this.prisma.walletBackup.upsert({
+      where: { walletId: record.walletId },
+      create: data,
+      update: data,
     });
   }
 }

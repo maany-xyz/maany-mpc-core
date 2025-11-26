@@ -31,3 +31,235 @@
    - Add coordinator APIs/endpoints for devices to upload/download backup fragments securely.
 
 Document additional engineering decisions here as they arise so the coordinator/server implementations stay aligned.
+
+# User Flow:
+1. Core States (per app + user)
+
+For a given (appId, userId) you basically have three meaningful states:
+
+NO_WALLET
+
+No entry on MPC servers
+
+No local key share
+→ Treat as “fresh user”
+
+REMOTE_ONLY
+
+MPC server has a wallet (and recovery artifacts)
+
+Device has no local share yet
+→ “Existing wallet, new/clean device → recovery flow”
+
+LOCAL + REMOTE
+
+Device has its local share (encrypted in Keychain/Keystore)
+
+MPC server has its share + recovery artifacts
+→ “Normal usage”
+
+Your SDK logic is basically a state machine moving between these.
+
+2. Registration → Background Wallet Creation (DKG)
+2.1. User registers / logs in
+
+User registers or logs in in the app:
+
+email + password / SSO / WebAuthn / whatever.
+
+App backend authenticates and issues:
+
+Auth token (JWT or session token).
+
+Frontend initializes Maany SDK:
+
+const maany = new MaanySDK({ appId, authToken });
+await maany.init();
+
+2.2. SDK init: local + remote discovery
+
+SDK flow (simplified):
+
+async function init() {
+  const localShare = await storage.getLocalShare(appId, userId);
+
+  if (localShare) {
+    state = "LOCAL + REMOTE";      // Normal usage
+    return;
+  }
+
+  // No local share → ask coordinator for wallet status
+  const status = await coordinator.getWalletStatus({ appId, authToken });
+
+  // status: { exists: boolean, createdAt?: string, ... }
+
+  if (!status.exists) {
+    // No wallet anywhere → background DKG
+    await createNewWalletInBackground();
+  } else {
+    // Wallet exists remotely but not locally → recovery UX
+    await showRecoveryUI(status);
+  }
+}
+
+2.3. Background DKG (fresh user, NO_WALLET)
+
+Case: no local share, no remote wallet.
+
+Flow:
+
+SDK calls coordinator:
+
+POST /wallet/create with authToken + appId.
+
+Coordinator:
+
+Verifies authToken (JWT locally or via /auth/verify).
+
+Generates its MPC share.
+
+Runs DKG with device (or device-side library) to generate user/device share.
+
+Stores:
+
+keyId = appId + userId
+
+coordinator share
+
+encrypted recovery fragments (for coordinator + third party).
+
+Device:
+
+Receives its share.
+
+Encrypts it with device key / biometric key.
+
+Stores it in Keychain/Keystore (or secure local storage).
+
+UX-wise you can keep this invisible or show something like:
+
+“Setting up your Maany wallet…” → small spinner/toast.
+Once done: → “Your wallet is ready.”
+
+From that moment on, you are in LOCAL + REMOTE state.
+
+3. Wallet Session UX (normal day-to-day use)
+
+For a “normal” logged-in user on a device where the wallet exists:
+
+User logs into app → gets authToken.
+
+SDK init() finds local share → no network roundtrip needed for wallet existence.
+
+For signing a transaction:
+
+SDK checks:
+
+Is user authenticated? (has authToken)
+
+Is local share accessible? (biometric/pin unlock if you want)
+
+Runs MPC signing protocol with coordinator:
+
+Device uses local share.
+
+Coordinator uses its share.
+
+Optionally enforce:
+
+Biometric every sign
+
+Or: 1 biometric unlock → “wallet session” for X minutes
+
+So you have two layers:
+
+App session: controlled by app auth token (login).
+
+Wallet session: controlled by device share + local biometric.
+
+This cleanly separates “user is logged in” from “user is allowed to sign”.
+
+4. Recovery UX (REMOTE_ONLY: existing user on new device)
+
+This is your more complex bit. Let’s break it cleanly:
+
+4.1. Detection of recovery situation
+
+On a new device:
+
+No local share
+
+But getWalletStatus() returns exists: true for (appId, userId)
+
+SDK tells the app:
+
+“We detected an existing Maany wallet for this account.
+Do you want to restore it on this device?”
+
+Here you show a clear choice:
+
+Restore existing wallet (recommended)
+
+Create a brand new wallet (dangerous, usually for advanced users, maybe hidden behind “advanced”)
+
+We’ll talk about the second option in section 5.
+
+4.2. Recovery flow (happy path)
+
+Assuming user picked Restore existing wallet:
+
+Extra verification step (strongly recommended):
+
+Email link or OTP, or WebAuthn confirmation
+
+This is to make sure a stolen app session token isn’t enough to recover the wallet.
+
+Example UX:
+
+“We emailed you a recovery link. Please confirm to restore your wallet.”
+
+Device sends recovery request to both servers:
+
+POST /wallet/recover to Coordinator
+
+POST /wallet/recover to Third-Party Recovery Server
+Both requests include:
+
+authToken (app-level)
+
+recoveryToken (from email / WebAuthn / etc.)
+
+appId, userId
+
+Coordinator / third-party validate:
+
+Check auth token (user is logged in).
+
+Check second factor (email / passkey / etc.).
+
+Confirm they’re allowed to release encrypted recovery fragments.
+
+Servers return encrypted recovery blobs:
+
+Device receives two blobs (coordinator fragment + third-party fragment).
+
+Uses user’s provided recovery passphrase / device key to decrypt (depending on your model).
+
+Reconstructs the device share.
+
+Device stores new share locally:
+
+Encrypted at rest (Keychain/Keystore).
+
+Overwrites any stale partial state (if any).
+
+(Optional) notify servers:
+
+POST /wallet/recovered so both servers can log device association / metrics.
+
+UX copy:
+
+“Wallet recovered successfully 🎉
+This device can now sign transactions.”
+
+From here, state becomes LOCAL + REMOTE again

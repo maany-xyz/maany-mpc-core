@@ -11,7 +11,9 @@ DKG, signing, and refresh flows entirely on-device.
   storage implementation and returns helpers to run DKG and signing rounds on top
   of the `@maanyio/mpc-rn-bare` binding.
 - Session helpers – `runDkg` and `runSign` functions compatible with the Node
-  coordinator semantics but implemented without Node built-ins.
+  coordinator semantics but implemented without Node built-ins. `runDkg`
+  automatically calls `backupCreate` so you can persist/upload the device
+  ciphertext + share fragments for recovery.
 - Cosmos utilities – `pubkeyToCosmosAddress`, `makeSignBytes`, and `sha256`
   built using `@noble/hashes` so they work in a React Native environment.
 - In-memory adapters – simple `InMemoryTransport` and
@@ -85,9 +87,18 @@ In your React Native app:
 
    ```ts
    async function demo() {
-     const { deviceKeypair, serverKeypair } = await coordinator.runDkg(ctx, {
+     const { deviceKeypair, serverKeypair, backup } = await coordinator.runDkg(ctx, {
        sessionId: new Uint8Array([1, 2, 3]),
+       backup: {
+         shareCount: 3,
+         threshold: 2,
+       },
      });
+
+     if (backup) {
+       // backup.ciphertext + backup.shares are ready to persist/upload per your policy
+       console.log('device backup shares:', backup.shares.length);
+     }
 
      const message = new Uint8Array(32);
      const signature = await coordinator.runSign(ctx, deviceKeypair, serverKeypair, {

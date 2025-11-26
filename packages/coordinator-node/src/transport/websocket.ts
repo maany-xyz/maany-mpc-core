@@ -1,6 +1,12 @@
 import { WebSocket, RawData } from 'ws';
 import type { Participant, Transport, TransportMessage } from '../transport';
 
+type ControlHandler = (message: {
+  participant: Participant;
+  data: RawData;
+  socket: WebSocket;
+}) => boolean | Promise<boolean>;
+
 function normalizeBuffer(value: Buffer | ArrayBuffer): Buffer {
   return Buffer.isBuffer(value) ? value : Buffer.from(value);
 }
@@ -23,11 +29,26 @@ export class WebSocketTransport implements Transport {
   };
 
   private readonly sockets: Partial<Record<Participant, WebSocket>> = {};
+  private readonly controlHandler?: ControlHandler;
+
+  constructor(controlHandler?: ControlHandler) {
+    this.controlHandler = controlHandler;
+  }
 
   setSocket(participant: Participant, socket: WebSocket): void {
     this.sockets[participant] = socket;
 
-    socket.on('message', (data) => {
+    socket.on('message', async (data) => {
+      if (this.controlHandler) {
+        try {
+          const handled = await this.controlHandler({ participant, data, socket });
+          if (handled) {
+            return;
+          }
+        } catch (err) {
+          console.warn('[ws-transport] control handler error:', err);
+        }
+      }
       const target = participant === 'device' ? 'server' : 'device';
       const payload = toUint8Array(data);
       console.log(`[ws-transport] inbound from ${participant} -> enqueue for ${target} (${payload.length} bytes)`);

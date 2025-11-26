@@ -85,6 +85,9 @@ const server = new CoordinatorServer({
     } catch (err) {
       console.error(`Session ${session.sessionId} failed:`, err);
     } finally {
+      if (session.intent.kind === 'dkg') {
+        await waitForBackupWindow(session);
+      }
       session.close();
     }
   },
@@ -99,6 +102,36 @@ async function sendDoneSignal(session, intent) {
   } catch (error) {
     console.warn(`[session ${session.sessionId}] failed to send completion signal:`, error);
   }
+}
+
+const BACKUP_GRACE_MS = Number(process.env.BACKUP_GRACE_MS ?? 15000);
+
+async function waitForBackupWindow(session) {
+  if (!session.socket) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return;
+  }
+  console.log(
+    `[session ${session.sessionId}] waiting up to ${BACKUP_GRACE_MS}ms for backup fragment`
+  );
+  await new Promise((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      session.socket?.off('close', onClose);
+      resolve();
+    }, BACKUP_GRACE_MS);
+
+    const onClose = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      resolve();
+    };
+
+    session.socket.once('close', onClose);
+  });
 }
 
 process.on('SIGINT', async () => {

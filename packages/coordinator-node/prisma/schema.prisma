@@ -16,6 +16,8 @@ model WalletShare {
   encryptedServerShare Bytes
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  backup WalletBackup?
 }
 
 model WalletNonce {
@@ -23,4 +25,21 @@ model WalletNonce {
   value     Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model WalletBackup {
+  walletId                String   @id
+  ciphertextKind          String
+  ciphertextCurve         String
+  ciphertextScheme        String
+  ciphertextKeyId         String
+  ciphertextThreshold     Int
+  ciphertextShareCount    Int
+  ciphertextLabel         Bytes
+  ciphertextBlob          Bytes
+  coordinatorFragment     Bytes
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  walletShare WalletShare @relation(fields: [walletId], references: [walletId])
 }
